@@ -38,7 +38,13 @@ Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g.
 
 Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-The TUI shows the live list (widget below the editor + `☑ n/m` footer) refreshed after every tool call and turn, and `/checklist` opens a full overlay (`/checklist hide|show` toggles the widget, `/checklist clear` empties the list).
+The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` opens a full overlay (`/checklist clear` empties the list). Three display modes are available via `/checklist settings` (or `/checklist settings <mode>`):
+
+- `statusbar` — persistent widget below the input box + footer (default).
+- `end-of-turn` — widget above the input box, refreshed when each turn settles.
+- `hidden` — no widget or footer; reopen with `/checklist` (overlay) or `/checklist show`.
+
+`/checklist hide` is shorthand for hidden mode.
 
 State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction.
 

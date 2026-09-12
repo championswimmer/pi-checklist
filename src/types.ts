@@ -23,13 +23,31 @@ export interface Checklist {
   updatedAt: number;
 }
 
+/** How the checklist renders in the TUI.
+ *
+ * - "statusbar": persistent widget below the input box + footer counter (current behavior).
+ * - "end-of-turn": widget above the input box, shown when a turn settles
+ *   (cleared when a turn starts, re-shown on turn_end / agent_settled).
+ * - "hidden": no widget or footer; use /checklist (overlay) or
+ *   /checklist show (back to statusbar) to see it.
+ */
+export type DisplayMode = "statusbar" | "end-of-turn" | "hidden";
+
+export const DISPLAY_MODES: readonly DisplayMode[] = ["statusbar", "end-of-turn", "hidden"];
+
+export function isDisplayMode(value: unknown): value is DisplayMode {
+  return value === "statusbar" || value === "end-of-turn" || value === "hidden";
+}
+
 /** Versioned snapshot persisted in the session JSONL. */
 export interface ChecklistSnapshot {
   v: 1;
   /** null = cleared */
   checklist: Checklist | null;
-  /** Persist /checklist hide across resume. */
+  /** Legacy persist for /checklist hide (pre-displayMode). Prefer displayMode. */
   widgetVisible?: boolean;
+  /** Preferred persist for render mode. Absent = migrate from widgetVisible. */
+  displayMode?: DisplayMode;
 }
 
 /** Tool names that can carry a ChecklistSnapshot in result details. */

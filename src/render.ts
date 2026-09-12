@@ -2,7 +2,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { countsOf, sortViews, viewsOf } from "./store.js";
-import type { Checklist, ChecklistSnapshot, TaskView } from "./types.js";
+import type { Checklist, ChecklistSnapshot, DisplayMode, TaskView } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Widget + footer (pure line builders; theme applied by the caller)
@@ -102,6 +102,22 @@ function paintLine(line: WidgetLine, theme: Theme, width: number): string {
 export function paintWidget(checklist: Checklist, theme: Theme, width: number): string[] {
   return widgetLines(checklist).map((l) => paintLine(l, theme, width));
 }
+
+// ---------------------------------------------------------------------------
+// Display-mode metadata for /checklist settings
+// ---------------------------------------------------------------------------
+
+export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
+  statusbar: "statusbar — below the input box",
+  "end-of-turn": "end of turn — above the input box",
+  hidden: "hidden — off, open on demand",
+};
+
+export const DISPLAY_MODE_DESCRIPTIONS: Record<DisplayMode, string> = {
+  statusbar: "Persistent widget below the input box + footer counter.",
+  "end-of-turn": "Widget above the input box, refreshed when each turn settles.",
+  hidden: "No widget or footer. Open with /checklist (overlay) or /checklist show.",
+};
 
 // ---------------------------------------------------------------------------
 // Tool transcript renderers (compact themed rows)

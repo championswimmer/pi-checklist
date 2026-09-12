@@ -6,6 +6,7 @@ import type {
   Checklist,
   ChecklistSnapshot,
   CreateInput,
+  DisplayMode,
   ReadInput,
   TaskStatus,
   UpdateTaskInput,
@@ -96,9 +97,14 @@ export interface Mutation {
   changed: boolean;
 }
 
-function snapshotOf(checklist: Checklist | null, widgetVisible?: boolean): ChecklistSnapshot {
+function snapshotOf(
+  checklist: Checklist | null,
+  widgetVisible?: boolean,
+  displayMode?: DisplayMode,
+): ChecklistSnapshot {
   const snap: ChecklistSnapshot = { v: 1, checklist };
   if (widgetVisible !== undefined) snap.widgetVisible = widgetVisible;
+  if (displayMode !== undefined) snap.displayMode = displayMode;
   return snap;
 }
 
@@ -106,6 +112,7 @@ export function executeCreate(
   current: Checklist | null,
   widgetVisible: boolean | undefined,
   raw: unknown,
+  displayMode?: DisplayMode,
 ): Mutation {
   const input = raw as CreateInput;
   const { checklist, assigned } = createOrAppend(current, {
@@ -119,7 +126,7 @@ export function executeCreate(
     assigned.length === 0
       ? `checklist cleared (0/${c.total} done)`
       : `checklist: ${assigned.length} task(s) installed (${c.done}/${c.total} done)\n${lines.join("\n")}`;
-  return { text, snapshot: snapshotOf(checklist, widgetVisible), changed: true };
+  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode), changed: true };
 }
 
 export function executeRead(current: Checklist | null, raw: unknown): Mutation {
@@ -142,10 +149,11 @@ export function executeUpdate(
   current: Checklist | null,
   widgetVisible: boolean | undefined,
   raw: unknown,
+  displayMode?: DisplayMode,
 ): Mutation {
   const input = raw as { updates: UpdateTaskInput[] };
   const { checklist, changes } = applyUpdates(current, input.updates ?? []);
   const c = countsOf(checklist);
   const text = `checklist (${c.done}/${c.total} done):\n${changes.map((l) => `  ${l}`).join("\n")}`;
-  return { text, snapshot: snapshotOf(checklist, widgetVisible), changed: true };
+  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode), changed: true };
 }

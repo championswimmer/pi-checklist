@@ -2,9 +2,14 @@
  * pi-checklist — session-scoped task checklist for the pi coding agent.
  *
  * Three tools (checklist_create / checklist_read / checklist_update), a
- * below-editor widget + footer status, a /checklist overlay, and session-JSONL
- * persistence (tool result details + appendEntry, reconstructed from the
- * current branch).
+ * widget + footer status, a /checklist overlay + display settings, and
+ * session-JSONL persistence (tool result details + appendEntry,
+ * reconstructed from the current branch).
+ *
+ * Display modes (see /checklist settings):
+ * - "statusbar": persistent widget below the input box + footer (default).
+ * - "end-of-turn": widget above the input box, shown when a turn settles.
+ * - "hidden": no widget or footer; /checklist overlay still works.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerChecklistCommand } from "./commands.js";
@@ -16,7 +21,7 @@ import {
   renderReadCall,
   renderUpdateCall,
 } from "./render.js";
-import { buildInjectSnippet, loadFromBranch } from "./store.js";
+import { buildInjectSnippet, loadFromBranch, resolveDisplayMode } from "./store.js";
 import {
   CREATE_GUIDELINES,
   CREATE_SNIPPET,
@@ -31,7 +36,7 @@ import {
   executeRead,
   executeUpdate,
 } from "./tools.js";
-import type { ChecklistSnapshot } from "./types.js";
+import type { ChecklistSnapshot, DisplayMode } from "./types.js";
 
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -39,29 +44,41 @@ const CUSTOM_TYPE = "pi-checklist";
 
 export default function (pi: ExtensionAPI) {
   // In-memory cache; the session JSONL branch is the source of truth.
-  let state: ChecklistSnapshot = { v: 1, checklist: null, widgetVisible: true };
+  let state: ChecklistSnapshot = { v: 1, checklist: null, widgetVisible: true, displayMode: "statusbar" };
+  // True between turn_start and turn_end/agent_settled. In "end-of-turn"
+  // mode the widget stays hidden mid-turn and appears when the turn settles.
+  let inTurn = false;
 
-  const getSnapshot = (): ChecklistSnapshot => state;
+  const getDisplayMode = (): DisplayMode => resolveDisplayMode(state);
 
   function refreshUi(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
     try {
       const checklist = state.checklist;
-      const visible = state.widgetVisible !== false;
-      if (!checklist || checklist.tasks.length === 0 || !visible) {
+      const mode = getDisplayMode();
+      const hasTasks = !!checklist && checklist.tasks.length > 0;
+      if (mode === "hidden" || !hasTasks) {
         ctx.ui.setWidget(WIDGET_KEY, undefined);
-      } else {
-        const frozen = checklist;
-        ctx.ui.setWidget(
-          WIDGET_KEY,
-          (_tui, theme) => ({
-            render: (width: number) => paintWidget(frozen, theme, width),
-            invalidate: () => {},
-          }),
-          { placement: "belowEditor" },
-        );
+        ctx.ui.setStatus(STATUS_KEY, mode === "hidden" ? undefined : (footerText(checklist) ?? undefined));
+        return;
       }
-      ctx.ui.setStatus(STATUS_KEY, visible ? (footerText(checklist) ?? undefined) : undefined);
+      // Footer stays live in both visible modes (cheap, out of the way).
+      ctx.ui.setStatus(STATUS_KEY, footerText(checklist) ?? undefined);
+      // End-of-turn mode defers the full widget until the turn settles.
+      if (mode === "end-of-turn" && inTurn) {
+        ctx.ui.setWidget(WIDGET_KEY, undefined);
+        return;
+      }
+      const frozen = checklist;
+      const placement = mode === "end-of-turn" ? undefined : { placement: "belowEditor" as const };
+      ctx.ui.setWidget(
+        WIDGET_KEY,
+        (_tui, theme) => ({
+          render: (width: number) => paintWidget(frozen, theme, width),
+          invalidate: () => {},
+        }),
+        placement,
+      );
     } catch {
       // UI refresh must never break a turn. Footer-only fallback: already
       // cleared/failed above; nothing more to do.
@@ -86,9 +103,12 @@ export default function (pi: ExtensionAPI) {
   function reconstruct(ctx: ExtensionContext): void {
     try {
       const branch = ctx.sessionManager.getBranch();
-      state = loadFromBranch(branch as Parameters<typeof loadFromBranch>[0]);
+      const loaded = loadFromBranch(branch as Parameters<typeof loadFromBranch>[0]);
+      // Normalize: carry the resolved mode explicitly so future snapshots
+      // (and legacy widgetVisible-only entries) stay consistent.
+      state = { ...loaded, displayMode: resolveDisplayMode(loaded) };
     } catch {
-      state = { v: 1, checklist: null };
+      state = { v: 1, checklist: null, displayMode: "statusbar" };
     }
     refreshUi(ctx);
   }
@@ -103,7 +123,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: CREATE_GUIDELINES,
     parameters: ChecklistCreateParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const mutation = executeCreate(state.checklist, state.widgetVisible, params);
+      const mutation = executeCreate(state.checklist, state.widgetVisible, params, getDisplayMode());
       commit(mutation.snapshot, ctx);
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
     },
@@ -134,7 +154,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: UPDATE_GUIDELINES,
     parameters: ChecklistUpdateParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const mutation = executeUpdate(state.checklist, state.widgetVisible, params);
+      const mutation = executeUpdate(state.checklist, state.widgetVisible, params, getDisplayMode());
       commit(mutation.snapshot, ctx);
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
     },
@@ -145,25 +165,36 @@ export default function (pi: ExtensionAPI) {
   // -- /checklist command ----------------------------------------------------
 
   registerChecklistCommand(pi, {
-    getSnapshot,
-    setWidgetVisible: (visible: boolean, ctx: ExtensionContext) => {
-      state = { ...state, widgetVisible: visible };
+    getDisplayMode,
+    setDisplayMode: (mode: DisplayMode, ctx: ExtensionContext) => {
+      state = { ...state, displayMode: mode, widgetVisible: mode !== "hidden" };
       persistSnapshot(state);
       refreshUi(ctx);
     },
     clear: (ctx: ExtensionContext) => {
-      state = { v: 1, checklist: null, widgetVisible: state.widgetVisible };
+      state = { v: 1, checklist: null, widgetVisible: state.widgetVisible, displayMode: getDisplayMode() };
       persistSnapshot(state);
       refreshUi(ctx);
     },
+    getChecklist: () => state.checklist,
   });
 
   // -- session + turn lifecycle ----------------------------------------------
 
   pi.on("session_start", async (_event, ctx) => reconstruct(ctx));
   pi.on("session_tree", async (_event, ctx) => reconstruct(ctx));
-  pi.on("turn_end", async (_event, ctx) => refreshUi(ctx));
-  pi.on("agent_settled", async (_event, ctx) => refreshUi(ctx));
+  pi.on("turn_start", async (_event, ctx) => {
+    inTurn = true;
+    refreshUi(ctx);
+  });
+  pi.on("turn_end", async (_event, ctx) => {
+    inTurn = false;
+    refreshUi(ctx);
+  });
+  pi.on("agent_settled", async (_event, ctx) => {
+    inTurn = false;
+    refreshUi(ctx);
+  });
 
   pi.on("before_agent_start", async (event, ctx) => {
     void ctx;

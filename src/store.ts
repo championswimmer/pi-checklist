@@ -9,11 +9,13 @@ import {
   type Checklist,
   type ChecklistSnapshot,
   type CreateInput,
+  type DisplayMode,
   type Task,
   type TaskStatus,
   type TaskView,
   type UpdateTaskInput,
   isChecklistSnapshot,
+  isDisplayMode,
 } from "./types.js";
 
 export const ID_PATTERN = /^[a-z0-9]{3}$/;
@@ -111,6 +113,17 @@ export function assertTransition(from: TaskStatus, to: TaskStatus, id: string): 
   if (!canTransition(from, to)) {
     throw new Error(`illegal transition for task ${id}: ${from} → ${to}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Display mode (statusbar | end-of-turn | hidden)
+// ---------------------------------------------------------------------------
+
+/** Resolve the effective display mode, migrating legacy widgetVisible. */
+export function resolveDisplayMode(snapshot: ChecklistSnapshot): DisplayMode {
+  if (isDisplayMode(snapshot.displayMode)) return snapshot.displayMode;
+  if (snapshot.widgetVisible === false) return "hidden";
+  return "statusbar";
 }
 
 // ---------------------------------------------------------------------------
