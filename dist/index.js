@@ -110,7 +110,7 @@ export default function (pi) {
     pi.registerTool({
         name: "checklist_create",
         label: "Checklist Create",
-        description: "Create or extend the session task checklist (replace by default, or append). Returns 3-char task ids.",
+        description: "Create or extend the session task checklist (replace by default, or append). Returns 3-char task ids. Send an empty tasks array to clear the checklist for the next set of tasks.",
         promptSnippet: CREATE_SNIPPET,
         promptGuidelines: CREATE_GUIDELINES,
         parameters: ChecklistCreateParams,

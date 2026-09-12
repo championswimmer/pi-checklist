@@ -16,7 +16,7 @@ export const ChecklistCreateParams = Type.Object({
         title: Type.String({ description: "Short task title (required)" }),
         notes: Type.Optional(Type.String({ description: "Optional extra context" })),
         dependsOn: DependsOn,
-    }), { description: "Tasks to install (replace) or add (append)" }),
+    }), { description: "Tasks to install (replace) or add (append). An empty array with mode replace clears the checklist, ready for the next set of tasks." }),
 });
 export const ChecklistReadParams = Type.Object({
     status: Type.Optional(StringEnum(["planned", "ongoing", "done", "cancelled"], {

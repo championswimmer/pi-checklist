@@ -36,7 +36,7 @@ export const ChecklistCreateParams: TSchema = Type.Object({
       notes: Type.Optional(Type.String({ description: "Optional extra context" })),
       dependsOn: DependsOn,
     }),
-    { description: "Tasks to install (replace) or add (append)" },
+    { description: "Tasks to install (replace) or add (append). An empty array with mode replace clears the checklist, ready for the next set of tasks." },
   ),
 });
 
