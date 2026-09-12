@@ -1,4 +1,5 @@
 import { registerChecklistCommand } from "./commands.js";
+import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
 import { buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
@@ -6,14 +7,18 @@ const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
 const CUSTOM_TYPE = "pi-checklist";
 export default function (pi) {
-    // In-memory cache; the session JSONL branch is the source of truth.
+    // In-memory cache; the session JSONL branch is the source of truth for
+    // tasks, the global prefs file (`<agentDir>/pi-checklist.json`) is the
+    // source of truth for display settings (seeded here so even
+    // session-less/print use honors them).
+    const globalSeed = loadGlobalPrefs();
     let state = {
         v: 1,
         checklist: null,
-        widgetVisible: true,
-        displayMode: "statusbar",
-        statusStyle: "pill",
-        iconSet: "nerd-font",
+        widgetVisible: (globalSeed.displayMode ?? "statusbar") !== "hidden",
+        displayMode: globalSeed.displayMode ?? "statusbar",
+        statusStyle: globalSeed.statusStyle ?? "pill",
+        iconSet: globalSeed.iconSet ?? "nerd-font",
     };
     // True between turn_start and turn_end/agent_settled. In "end-of-turn"
     // mode the widget stays hidden mid-turn and appears when the turn settles.
@@ -68,21 +73,36 @@ export default function (pi) {
         persistSnapshot(snapshot);
         refreshUi(ctx);
     }
+    /** Write the current display prefs to the global file (best-effort). */
+    function savePrefs() {
+        saveGlobalPrefs({ displayMode: getDisplayMode(), statusStyle: getStatusStyle(), iconSet: getIconSet() });
+    }
     function reconstruct(ctx) {
         try {
             const branch = ctx.sessionManager.getBranch();
             const loaded = loadFromBranch(branch);
+            // Tasks come from the branch; prefs prefer the global file (so a
+            // setting changed in another session isn't clobbered by resuming an
+            // older session), falling back to the snapshot for back-compat.
+            const global = loadGlobalPrefs();
             // Normalize: carry the resolved prefs explicitly so future snapshots
             // (and legacy entries without them) stay consistent.
             state = {
                 ...loaded,
-                displayMode: resolveDisplayMode(loaded),
-                statusStyle: resolveStatusStyle(loaded),
-                iconSet: resolveIconSet(loaded),
+                displayMode: global.displayMode ?? resolveDisplayMode(loaded),
+                statusStyle: global.statusStyle ?? resolveStatusStyle(loaded),
+                iconSet: global.iconSet ?? resolveIconSet(loaded),
             };
         }
         catch {
-            state = { v: 1, checklist: null, displayMode: "statusbar", statusStyle: "pill", iconSet: "nerd-font" };
+            const global = loadGlobalPrefs();
+            state = {
+                v: 1,
+                checklist: null,
+                displayMode: global.displayMode ?? "statusbar",
+                statusStyle: global.statusStyle ?? "pill",
+                iconSet: global.iconSet ?? "nerd-font",
+            };
         }
         refreshUi(ctx);
     }
@@ -137,18 +157,21 @@ export default function (pi) {
         setDisplayMode: (mode, ctx) => {
             state = { ...state, displayMode: mode, widgetVisible: mode !== "hidden" };
             persistSnapshot(state);
+            savePrefs();
             refreshUi(ctx);
         },
         getStatusStyle,
         setStatusStyle: (style, ctx) => {
             state = { ...state, statusStyle: style };
             persistSnapshot(state);
+            savePrefs();
             refreshUi(ctx);
         },
         getIconSet,
         setIconSet: (iconSet, ctx) => {
             state = { ...state, iconSet };
             persistSnapshot(state);
+            savePrefs();
             refreshUi(ctx);
         },
         getRenderOpts,

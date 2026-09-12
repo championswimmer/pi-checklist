@@ -43,6 +43,7 @@ pi-checklist/
 │   ├── index.ts               ← extension entry (export default function)
 │   ├── types.ts               ← Task / Checklist / status types
 │   ├── store.ts               ← in-memory store, transitions, dependency checks
+│   ├── prefs.ts               ← global display prefs (<agentDir>/pi-checklist.json)
 │   ├── tools.ts               ← checklist_create / checklist_read / checklist_update
 │   ├── render.ts              ← widget, tool renderers, /checklist overlay
 │   └── commands.ts            ← /checklist command
@@ -73,14 +74,16 @@ Pi docs live in the installed package, not this repo:
 
 ### State that survives branch / resume
 
-Sessions are JSONL trees under `~/.pi/agent/sessions/`. **That file is the store.** Do not use a sidecar.
+Sessions are JSONL trees under `~/.pi/agent/sessions/` (or `$PI_CODING_AGENT_DIR/sessions` when overridden). **That file is the store for tasks.** Do not use a sidecar for tasks.
 
 Write a versioned snapshot (`{ v: 1, checklist, widgetVisible }`) in two places on every mutation:
 
 1. Tool result `details` — official branching pattern (`extensions.md` State Management, `examples/extensions/todo.ts`). Not sent to the LLM.
 2. `pi.appendEntry("pi-checklist", snapshot)` — same JSONL, `type: "custom"`, also not sent to the LLM. Covers human commands (`/checklist clear`) that never produce a tool result.
 
-Reconstruct by walking `ctx.sessionManager.getBranch()` oldest → newest; last matching snapshot wins. **Never `getEntries()`** (that mixes other branches). Re-run on `session_start` (`/resume`) and `session_tree` (`/branch`, `/undo`). Compaction appends a summary; it does not delete old lines, so `getBranch()` still sees the snapshot. The LLM may forget it — re-inject a compact snippet on `before_agent_start`.
+Reconstruct tasks by walking `ctx.sessionManager.getBranch()` oldest → newest; last matching snapshot wins. **Never `getEntries()`** (that mixes other branches). Re-run on `session_start` (`/resume`) and `session_tree` (`/branch`, `/undo`). Compaction appends a summary; it does not delete old lines, so `getBranch()` still sees the snapshot. The LLM may forget it — re-inject a compact snippet on `before_agent_start`.
+
+Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in `<agentDir>/pi-checklist.json` (`src/prefs.ts`): agent dir = `$PI_CODING_AGENT_DIR` else `~/.pi/agent` (tilde-expanded), mirroring pi's own `getAgentDir()` (`docs/environment-variables.md`, `dist/config.js`). Validate with `isDisplayMode`/`isStatusStyle`/`isIconSet`; silent fail on read/write. Precedence on reconstruct: global file > branch snapshot > defaults. Settings setters write both session snapshot and global file; task mutations touch only the session.
 
 ### TUI surfaces we will use
 
@@ -107,10 +110,11 @@ Reconstruct by walking `ctx.sessionManager.getBranch()` oldest → newest; last 
 - [x] `dist/` committed to git on purpose: pi installs git packages with `npm install --omit=dev` and no build step, so git installs need built files in the clone. Rebuild before every src-touching commit; `prepublishOnly` rebuilds again on publish
 - [x] Footgun fixed: exported tool param schemas are annotated `: TSchema` (type-only import from `typebox`) — otherwise declaration emit fails with TS2742 because `StringEnum` (from `@earendil-works/pi-ai`) brands types with pi's nested typebox copy
 - [x] Settings upgrade (plan 003): `/checklist settings` is one `SettingsList` screen (display / progress style / progress icons) with live preview + quick-set (`/checklist settings [display] [style] [icons]`); status styles `color`/`pill`/`icon`, pill = text on `theme.bg` background, icon sets `nerd-font` (NF Octicons U+F46A/F500/F479/F4A4/F530) vs `emoji` (🔄▶️⛔✅❌); prefs persisted on snapshot, widget/transcript/overlay all honor them (28-check smoke ALL PASS); settings is a rounded-corner bordered overlay dialog (frameDialog in render.ts — pi-tui has no bordered box, dialogs draw ╭─╮/│/╰─╯ chrome themselves) with a nerdfonts.com hint under the icons row
+- [x] Global settings (plan 004): display prefs also persist in `<agentDir>/pi-checklist.json` (`src/prefs.ts`, agent dir = `$PI_CODING_AGENT_DIR` else `~/.pi/agent`, mirroring pi's `getAgentDir`); precedence global > session snapshot > defaults; tsc clean, prefs unit + mocked wiring smoke pass
 - [ ] TUI widget/footer/overlay eyeballed in an interactive session
 
 ## Publishing notes
 
 - GitHub repo: `https://github.com/championswimmer/pi-checklist`
-- npm name is `pi-checklist` (unscoped), v0.1.1; `publishConfig.access = "public"` kept (harmless unscoped).
+- npm name is `pi-checklist` (unscoped), v0.2.0; `publishConfig.access = "public"` kept (harmless unscoped).
 - `publishConfig.access = "public"` if scoped.

@@ -4,7 +4,11 @@
  * Three tools (checklist_create / checklist_read / checklist_update), a
  * widget + footer status, a /checklist overlay + display settings, and
  * session-JSONL persistence (tool result details + appendEntry,
- * reconstructed from the current branch).
+ * reconstructed from the current branch). Display *settings*
+ * (displayMode / statusStyle / iconSet) additionally persist globally in
+ * `<agentDir>/pi-checklist.json` (agent dir = `PI_CODING_AGENT_DIR` or
+ * `~/.pi/agent`, mirroring pi's own getAgentDir), so they survive across
+ * sessions; checklist tasks stay session-scoped.
  *
  * Display modes (see /checklist settings):
  * - "statusbar": persistent widget below the input box + footer (default).

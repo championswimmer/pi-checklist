@@ -4,7 +4,11 @@
  * Three tools (checklist_create / checklist_read / checklist_update), a
  * widget + footer status, a /checklist overlay + display settings, and
  * session-JSONL persistence (tool result details + appendEntry,
- * reconstructed from the current branch).
+ * reconstructed from the current branch). Display *settings*
+ * (displayMode / statusStyle / iconSet) additionally persist globally in
+ * `<agentDir>/pi-checklist.json` (agent dir = `PI_CODING_AGENT_DIR` or
+ * `~/.pi/agent`, mirroring pi's own getAgentDir), so they survive across
+ * sessions; checklist tasks stay session-scoped.
  *
  * Display modes (see /checklist settings):
  * - "statusbar": persistent widget below the input box + footer (default).
@@ -13,6 +17,7 @@
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerChecklistCommand } from "./commands.js";
+import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import {
   footerText,
   paintWidget,
@@ -44,14 +49,18 @@ const STATUS_KEY = "checklist";
 const CUSTOM_TYPE = "pi-checklist";
 
 export default function (pi: ExtensionAPI) {
-  // In-memory cache; the session JSONL branch is the source of truth.
+  // In-memory cache; the session JSONL branch is the source of truth for
+  // tasks, the global prefs file (`<agentDir>/pi-checklist.json`) is the
+  // source of truth for display settings (seeded here so even
+  // session-less/print use honors them).
+  const globalSeed = loadGlobalPrefs();
   let state: ChecklistSnapshot = {
     v: 1,
     checklist: null,
-    widgetVisible: true,
-    displayMode: "statusbar",
-    statusStyle: "pill",
-    iconSet: "nerd-font",
+    widgetVisible: (globalSeed.displayMode ?? "statusbar") !== "hidden",
+    displayMode: globalSeed.displayMode ?? "statusbar",
+    statusStyle: globalSeed.statusStyle ?? "pill",
+    iconSet: globalSeed.iconSet ?? "nerd-font",
   };
   // True between turn_start and turn_end/agent_settled. In "end-of-turn"
   // mode the widget stays hidden mid-turn and appears when the turn settles.
@@ -112,20 +121,36 @@ export default function (pi: ExtensionAPI) {
     refreshUi(ctx);
   }
 
+  /** Write the current display prefs to the global file (best-effort). */
+  function savePrefs(): void {
+    saveGlobalPrefs({ displayMode: getDisplayMode(), statusStyle: getStatusStyle(), iconSet: getIconSet() });
+  }
+
   function reconstruct(ctx: ExtensionContext): void {
     try {
       const branch = ctx.sessionManager.getBranch();
       const loaded = loadFromBranch(branch as Parameters<typeof loadFromBranch>[0]);
+      // Tasks come from the branch; prefs prefer the global file (so a
+      // setting changed in another session isn't clobbered by resuming an
+      // older session), falling back to the snapshot for back-compat.
+      const global = loadGlobalPrefs();
       // Normalize: carry the resolved prefs explicitly so future snapshots
       // (and legacy entries without them) stay consistent.
       state = {
         ...loaded,
-        displayMode: resolveDisplayMode(loaded),
-        statusStyle: resolveStatusStyle(loaded),
-        iconSet: resolveIconSet(loaded),
+        displayMode: global.displayMode ?? resolveDisplayMode(loaded),
+        statusStyle: global.statusStyle ?? resolveStatusStyle(loaded),
+        iconSet: global.iconSet ?? resolveIconSet(loaded),
       };
     } catch {
-      state = { v: 1, checklist: null, displayMode: "statusbar", statusStyle: "pill", iconSet: "nerd-font" };
+      const global = loadGlobalPrefs();
+      state = {
+        v: 1,
+        checklist: null,
+        displayMode: global.displayMode ?? "statusbar",
+        statusStyle: global.statusStyle ?? "pill",
+        iconSet: global.iconSet ?? "nerd-font",
+      };
     }
     refreshUi(ctx);
   }
@@ -200,18 +225,21 @@ export default function (pi: ExtensionAPI) {
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionContext) => {
       state = { ...state, displayMode: mode, widgetVisible: mode !== "hidden" };
       persistSnapshot(state);
+      savePrefs();
       refreshUi(ctx);
     },
     getStatusStyle,
     setStatusStyle: (style: StatusStyle, ctx: ExtensionContext) => {
       state = { ...state, statusStyle: style };
       persistSnapshot(state);
+      savePrefs();
       refreshUi(ctx);
     },
     getIconSet,
     setIconSet: (iconSet: IconSet, ctx: ExtensionContext) => {
       state = { ...state, iconSet };
       persistSnapshot(state);
+      savePrefs();
       refreshUi(ctx);
     },
     getRenderOpts,
