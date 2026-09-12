@@ -20,11 +20,11 @@ Pi already has two nearby examples — `todo.ts` (stateful tool + overlay) and `
 type TaskStatus = "planned" | "ongoing" | "done" | "cancelled";
 
 interface Task {
-  id: string;              // stable, unique in the checklist. Auto `t1`, `t2`, … or a caller-supplied slug.
+  id: string;              // exactly 3 chars, [a-z0-9], assigned at create, frozen
   title: string;           // required, short
   notes?: string;          // optional extra context for the agent
   status: TaskStatus;
-  dependsOn: string[];     // task ids that must be `done` before this may become `ongoing`
+  dependsOn: string[];     // 3-char task ids that must be `done` before this may become `ongoing`
   createdAt: number;
   updatedAt: number;
 }
@@ -32,18 +32,59 @@ interface Task {
 interface Checklist {
   title?: string;          // optional session/goal name, shown in the widget header
   tasks: Task[];
-  nextId: number;          // next auto-id counter (t{nextId})
   updatedAt: number;
 }
 ```
 
-`dependsOn` is always an array. A single dependency is `[ "t1" ]`. Empty array = unblocked (aside from its own status).
+`dependsOn` is always an array. A single dependency is `[ "k7q" ]`. Empty array = unblocked (aside from its own status). No `nextId` counter — ids come from a title hash (see below).
 
-Ids:
+### Task ids (3-character alphanumeric)
 
-- Auto-assigned as `t1`, `t2`, … via `nextId`.
-- Caller may pass a custom slug (`id: "scaffold"`). Must match `/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/`.
-- Duplicate ids are rejected.
+Every task id is **exactly 3 characters**, alphabet `[0-9a-z]`, stored lowercase. Pattern: `/^[a-z0-9]{3}$/`. Space is 36³ = 46,656; a session list of ~20 tasks collides with negligible probability, and we still disambiguate.
+
+**Generate by hashing the title** (not random, not sequential). Deterministic, no extra dependency, no counter to persist:
+
+```ts
+const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"; // 36
+
+function fnv1a(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function encode3(n: number): string {
+  let x = n >>> 0;
+  let out = "";
+  for (let i = 0; i < 3; i++) {
+    out = ALPHABET[x % 36] + out;
+    x = Math.floor(x / 36);
+  }
+  return out;
+}
+
+function allocId(title: string, used: Set<string>): string {
+  const key = title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  for (let salt = 0; salt < 64; salt++) {
+    const id = encode3(fnv1a(salt === 0 ? key : `${key}\0${salt}`));
+    if (!used.has(id)) return id;
+  }
+  throw new Error("could not allocate a free 3-char id");
+}
+```
+
+Rules:
+
+- **Hash the normalized title only**, never status/notes — otherwise ids would move. Id is assigned at create time and **frozen** (a later title edit does not rehash).
+- **Caller-supplied `id`** is optional. If present it must match `/^[a-z0-9]{3}$/i`, is lowercased, and must be unique. Use this when creating a DAG in one `checklist_create` call so `dependsOn` can name siblings the agent already chose.
+- If `id` is omitted, `allocId(title, used)` fills it in. Two-pass create: allocate every id first (explicit then hashed), then resolve `dependsOn` against that set plus any existing tasks (append mode).
+- Duplicate ids are rejected. Unknown / wrong-shape `dependsOn` ids are rejected. `dependsOn` values are lowercased at the tool boundary.
+- **Do not invent ids in the LLM.** Prompt guidelines: copy the 3-char codes returned by `checklist_create` / `checklist_read`. Never guess the hash.
+- No crypto (`SHA-256` / Web Crypto) — FNV-1a is enough, sync, and keeps `store.ts` dependency-free.
+- Skip reserved words that are also valid 3-char ids if they would confuse the command parser later (`all` is the only likely one; reject `all` as an id).
 
 ### Status state machine
 
@@ -80,7 +121,7 @@ Illegal transitions return an error (no mutation). `done` cannot be reopened in 
 Additional rules:
 
 - **Multiple `ongoing` allowed**, but prompt guidelines tell the agent to keep at most one (or a tight parallel set).
-- **Cancelled dependencies block dependents.** If `t1` is `cancelled`, `t2` depending on `t1` cannot start. The agent must cancel `t2`, retarget `dependsOn`, or reopen `t1`.
+- **Cancelled dependencies block dependents.** If `k7q` is `cancelled`, `m2n` depending on `k7q` cannot start. The agent must cancel `m2n`, retarget `dependsOn`, or reopen `k7q`.
 - **Cycles are rejected** on create and on `dependsOn` edits (DFS).
 - **Unknown `dependsOn` ids are rejected.**
 - A task cannot depend on itself.
@@ -113,11 +154,12 @@ Create or extend the session list.
 ```
 
 - `replace` (default): wipe the current list and install this one. Empty `tasks` = clear.
-- `append`: add tasks; `nextId` continues. `dependsOn` may point at existing ids.
+- `append`: add tasks; new ids are hashed against the existing used-id set. `dependsOn` may point at existing ids.
 - New tasks always start as `planned`.
-- Returns a compact text summary the LLM can read, plus a full `Checklist` snapshot in `details`.
+- Two-pass id assignment (explicit ids, then hashed titles), then `dependsOn` resolution.
+- Returns a compact text summary **including every assigned 3-char id** so the LLM can copy them, plus a full `Checklist` snapshot in `details`.
 
-`promptGuidelines`: use at the start of multi-step work; replace when the plan changes substantially; append when new work appears mid-session.
+`promptGuidelines`: use at the start of multi-step work; replace when the plan changes substantially; append when new work appears mid-session. Omit `id` unless you need a same-batch DAG — then pass explicit 3-char ids. Always copy returned ids; never invent them.
 
 #### 2. `checklist_read`
 
@@ -147,7 +189,7 @@ Returns every task (or the filter) with `ready` / `blockedBy` computed. Always c
 - All-or-nothing: validate every update, then apply. Partial apply would leave the list lying to the widget.
 - Status changes go through the transition table above.
 - Title / notes / dependsOn edits are allowed on non-`done` tasks. `done` tasks are frozen.
-- Returns the new snapshot + a line per change (`t2 planned → ongoing`).
+- Returns the new snapshot + a line per change (`m2n planned → ongoing`).
 
 `promptGuidelines`: mark `ongoing` before starting work; mark `done` as soon as the work is actually done; `cancel` tasks that the new plan made irrelevant; never start a task whose `blockedBy` is non-empty.
 
@@ -187,11 +229,11 @@ Suggested layout (theme tokens, no hardcoded hex):
 
 ```
 checklist  3/8 done   1 ongoing   2 ready   2 blocked
-● t2  Implement parser          ongoing
-○ t3  Write unit tests          blocked ← t2
-○ t4  Wire /checklist command   ready
-✓ t1  Scaffold package          done
-✕ t5  Publish to npm            cancelled
+● m2n  Implement parser          ongoing
+○ b8t  Write unit tests          blocked ← m2n
+○ w4c  Wire /checklist command   ready
+✓ k7q  Scaffold package          done
+✕ p0x  Publish to npm            cancelled
 ```
 
 Rules:
@@ -224,7 +266,7 @@ Custom `renderCall` / `renderResult` so the chat does not dump JSON:
 
 - create: `checklist create  6 tasks`
 - read: `checklist  3/8 done`
-- update: `checklist  t2 planned → ongoing`
+- update: `checklist  m2n planned → ongoing`
 
 Use `theme.fg("accent"|"success"|"warning"|"error", …)` / `theme.bold`.
 
@@ -238,8 +280,8 @@ On each tool:
 On `before_agent_start`, if the checklist is non-empty, inject a **short** system snippet (not the full notes) so compaction cannot make the agent forget the list:
 
 ```
-Current checklist (3/8 done): t2 ongoing "Implement parser"; ready: t4; blocked: t3 ← t2.
-Use checklist_update as work progresses. Do not start blocked tasks.
+Current checklist (3/8 done): m2n ongoing "Implement parser"; ready: w4c; blocked: b8t ← m2n.
+Use checklist_update as work progresses. Do not start blocked tasks. Copy 3-char ids; never invent them.
 ```
 
 Skip the injection when empty so we do not spend tokens on idle sessions.
@@ -337,7 +379,7 @@ Keep `store.ts` free of `pi` / TUI imports so transitions can be unit-tested wit
 ## Implementation steps
 
 1. **Manifest.** Add `package.json` (and MIT `LICENSE` to match siblings). Do not publish.
-2. **Types + store.** Implement the state machine, id allocation, cycle detection, `ready`/`blockedBy`, replace/append, reconstruct-from-branch helper (pure: takes an array of `{ toolName, details }`).
+2. **Types + store.** Implement the state machine, FNV-1a 3-char id allocation, cycle detection, `ready`/`blockedBy`, replace/append, reconstruct-from-branch helper (pure: takes an array of `{ toolName, details }`).
 3. **Tools.** Register `checklist_create`, `checklist_read`, `checklist_update` with TypeBox params, guidelines, snippets, `details` snapshots, and compact `content` text.
 4. **TUI render.** Widget lines, footer, tool renderers. Call `refreshUi()` from execute + `turn_end` + `agent_settled`.
 5. **`/checklist` command.** Overlay + `show`/`hide`/`clear`.
@@ -347,12 +389,14 @@ Keep `store.ts` free of `pi` / TUI imports so transitions can be unit-tested wit
 
 ## Verification
 
-- Create 4 tasks where `t3` depends on `t2` and `t2` on `t1`. `checklist_read` shows `t1` ready, `t2`/`t3` blocked.
-- `t2 → ongoing` while `t1` is planned **fails**.
-- `t1 → ongoing → done`, then `t2 → ongoing` **succeeds**.
-- Cancel `t1` after reopen-from-planned: dependents stay blocked; updating `t2 → ongoing` still fails; cancelling `t2` succeeds.
-- Cycle `t1 dependsOn t2, t2 dependsOn t1` rejected on create.
-- `mode: "append"` keeps existing tasks and continues ids.
+- Create 4 tasks where `b8t` depends on `m2n` and `m2n` on `k7q` (explicit ids). `checklist_read` shows `k7q` ready, `m2n`/`b8t` blocked.
+- `m2n → ongoing` while `k7q` is planned **fails**.
+- `k7q → ongoing → done`, then `m2n → ongoing` **succeeds**.
+- Cancel `k7q` after reopen-from-planned: dependents stay blocked; updating `m2n → ongoing` still fails; cancelling `m2n` succeeds.
+- Cycle `k7q dependsOn m2n, m2n dependsOn k7q` rejected on create.
+- Omitting `id` yields a stable 3-char hash of the title; hashing the same title twice in one list salts and gets a different id.
+- `mode: "append"` keeps existing tasks and hashes new titles against the used-id set.
+- Reject ids that are not exactly 3 alphanumeric chars (`scaffold`, `t1`, `AB`).
 - `/branch` to a parent that had an older snapshot restores that snapshot (not the child tip).
 - Empty list hides widget and footer.
 - Print mode (`PI_PRINT_MODE` / no TUI): tools still work, no throw on missing `ctx.ui`.
@@ -381,6 +425,7 @@ Keep `store.ts` free of `pi` / TUI imports so transitions can be unit-tested wit
 
 - Three tools, not one `checklist` tool with `action`.
 - `dependsOn: string[]` (coerce a single string at the tool boundary).
+- Task ids are exactly 3 lowercase alphanumeric chars, generated by FNV-1a of the normalized title (base36, salt on collision). Optional explicit id on create for same-batch DAGs. Ids are frozen.
 - `done` is terminal; `cancelled` can reopen to `planned`.
 - Snapshot in tool `details`, reconstruct from the session branch.
 - Widget `belowEditor` + footer `☑ n/m` + `/checklist` overlay.

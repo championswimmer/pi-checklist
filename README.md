@@ -43,7 +43,7 @@ Once implemented, the agent will get three tools:
 | `checklist_read` | Read tasks, statuses, and which items are blocked |
 | `checklist_update` | Move tasks through `planned` / `ongoing` / `done` / `cancelled` |
 
-Each task can name `dependsOn` task ids. A task cannot become `ongoing` until every dependency is `done`.
+Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g. `k7q`). `dependsOn` names those ids. A task cannot become `ongoing` until every dependency is `done`.
 
 The TUI will show the live list (widget + footer counts) after each agent turn, and `/checklist` will open a full overlay.
 
