@@ -1,6 +1,6 @@
 {
   "name": "pi-checklist",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "pi extension: session-scoped task checklist with dependencies and a live TUI renderer",
   "type": "module",
   "license": "MIT",
