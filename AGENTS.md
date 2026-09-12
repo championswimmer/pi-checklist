@@ -94,9 +94,9 @@ Official pattern (from `todo.ts`): **do not use a sidecar file for session task 
 ## Current status
 
 - [x] Repo scaffolding (`AGENTS.md`, `README.md`, `.agents/`)
-- [ ] Plan 001 written
+- [x] Plan 001 written (`.agents/plans/001-checklist-extension.md`)
 - [ ] Extension implemented
-- [ ] GitHub repo created and pushed
+- [x] GitHub repo created and pushed (`championswimmer/pi-checklist`)
 - [ ] Smoke-tested with `pi -e`
 
 ## Publishing notes
