@@ -1,6 +1,6 @@
 # Plan 001 — pi-checklist extension
 
-**Status:** planned
+**Status:** done (implemented 2026-09-12; TUI eyeball still open)
 **Goal:** Ship a pi extension that lets the agent maintain a session-scoped task checklist with dependencies, and show that list in the TUI after every turn.
 
 ## Why this exists

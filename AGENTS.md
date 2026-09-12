@@ -100,9 +100,10 @@ Reconstruct by walking `ctx.sessionManager.getBranch()` oldest → newest; last 
 
 - [x] Repo scaffolding (`AGENTS.md`, `README.md`, `.agents/`)
 - [x] Plan 001 written (`.agents/plans/001-checklist-extension.md`)
-- [ ] Extension implemented
+- [x] Extension implemented (`package.json`, `src/types.ts`, `src/store.ts`, `src/tools.ts`, `src/render.ts`, `src/commands.ts`, `src/index.ts`)
 - [x] GitHub repo created and pushed (`championswimmer/pi-checklist`)
-- [ ] Smoke-tested with `pi -e`
+- [x] Smoke-tested with `pi -e` (print-mode tool round-trip; store unit checks via jiti; wiring checks via mocked pi; `tsc --noEmit` clean)
+- [ ] TUI widget/footer/overlay eyeballed in an interactive session
 
 ## Publishing notes
 

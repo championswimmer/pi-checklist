@@ -22,20 +22,11 @@ The agent can:
 
 ## Status
 
-Scaffolding only. The extension is not implemented yet.
+Implemented (v0.1.0). See [`.agents/plans/001-checklist-extension.md`](.agents/plans/001-checklist-extension.md) for the design.
 
-This repository currently contains:
+## Usage
 
-- repo-level agent instructions in `AGENTS.md`
-- this README
-- `.agents/plans/` for implementation plans
-- `.agents/skills/` for project-local skills
-
-See [`.agents/plans/`](.agents/plans/) for the design and build plan.
-
-## Intended usage
-
-Once implemented, the agent will get three tools:
+The agent gets three tools:
 
 | Tool | Purpose |
 |---|---|
@@ -43,11 +34,15 @@ Once implemented, the agent will get three tools:
 | `checklist_read` | Read tasks, statuses, and which items are blocked |
 | `checklist_update` | Move tasks through `planned` / `ongoing` / `done` / `cancelled` |
 
-Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g. `k7q`). `dependsOn` names those ids. A task cannot become `ongoing` until every dependency is `done`.
+Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g. `k7q`). `dependsOn` names those ids. A task cannot become `ongoing` (or shortcut to `done`) until every dependency is `done`.
 
-The TUI will show the live list (widget + footer counts) after each agent turn, and `/checklist` will open a full overlay.
+Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-## Install (after implementation)
+The TUI shows the live list (widget below the editor + `☑ n/m` footer) refreshed after every tool call and turn, and `/checklist` opens a full overlay (`/checklist hide|show` toggles the widget, `/checklist clear` empties the list).
+
+State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction.
+
+## Install
 
 **Quick one-off test:**
 
