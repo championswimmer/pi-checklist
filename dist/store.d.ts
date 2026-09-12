@@ -4,7 +4,7 @@
  *
  * No pi / TUI imports — testable with plain node.
  */
-import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Task, type TaskStatus, type IconSet, type StatusStyle, type TaskView, type UpdateTaskInput } from "./types.js";
+import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Task, type TaskStatus, type IconSet, type StatusStyle, type TaskView, type UpdateTaskInput, type UsageMode } from "./types.js";
 export declare const ID_PATTERN: RegExp;
 export declare const TASK_STATUSES: readonly TaskStatus[];
 export declare function normalizeTitleKey(title: string): string;
@@ -22,6 +22,8 @@ export declare function resolveDisplayMode(snapshot: ChecklistSnapshot): Display
 export declare function resolveStatusStyle(snapshot: ChecklistSnapshot): StatusStyle;
 /** Resolve the effective icon set. Default "nerd-font" (Nerd Font glyphs). */
 export declare function resolveIconSet(snapshot: ChecklistSnapshot): IconSet;
+/** Resolve the effective usage-guidance mode. Default "moderate". */
+export declare function resolveUsage(snapshot: ChecklistSnapshot): UsageMode;
 export declare function toView(task: Task, byId: Map<string, Task>): TaskView;
 export declare function viewsOf(checklist: Checklist): TaskView[];
 /** Sort order: ongoing, ready planned, blocked planned, done, cancelled. */

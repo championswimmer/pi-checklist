@@ -1,7 +1,7 @@
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { Container, SettingsList, Text } from "@earendil-works/pi-tui";
-import { DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, ChecklistOverlay, frameDialog, previewLines, } from "./render.js";
-import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, isDisplayMode, isIconSet, isStatusStyle, } from "./types.js";
+import { DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, frameDialog, previewLines, } from "./render.js";
+import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, isDisplayMode, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
 export function normalizeDisplayMode(raw) {
     const word = raw.trim().toLowerCase().replace(/_/g, "-");
@@ -34,6 +34,15 @@ export function normalizeIconSet(raw) {
         return "emoji";
     return undefined;
 }
+/** Normalize a user-typed usage word to a UsageMode (accepts shorthands). */
+export function normalizeUsageMode(raw) {
+    const word = raw.trim().toLowerCase();
+    if (word === "moderate" || word === "mod" || word === "m")
+        return "moderate";
+    if (word === "aggressive" || word === "aggro" || word === "a")
+        return "aggressive";
+    return undefined;
+}
 export function parseChecklistArgs(raw) {
     const parts = raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const head = parts[0] ?? "";
@@ -52,6 +61,7 @@ export function parseChecklistArgs(raw) {
         let displayMode;
         let statusStyle;
         let iconSet;
+        let usage;
         for (const token of tokens) {
             const m = normalizeDisplayMode(token);
             if (m && displayMode === undefined) {
@@ -68,16 +78,21 @@ export function parseChecklistArgs(raw) {
                 iconSet = i;
                 continue;
             }
+            const u = normalizeUsageMode(token);
+            if (u && usage === undefined) {
+                usage = u;
+                continue;
+            }
             return { name: "help" };
         }
-        if (displayMode === undefined && statusStyle === undefined && iconSet === undefined) {
+        if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined) {
             return { name: "help" };
         }
-        return { name: "settings", displayMode, statusStyle, iconSet };
+        return { name: "settings", displayMode, statusStyle, iconSet, usage };
     }
     return { name: "help" };
 }
-export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji]]";
+export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive]]";
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(ctx, getChecklist, getRenderOpts) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
@@ -113,6 +128,7 @@ async function openSettingsScreen(ctx, deps) {
         let display = deps.getDisplayMode();
         let style = deps.getStatusStyle();
         let icons = deps.getIconSet();
+        let usage = deps.getUsage();
         const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
         const previewBody = new Text("", 1, 0);
         const repaintPreview = (th) => {
@@ -148,6 +164,13 @@ async function openSettingsScreen(ctx, deps) {
                 values: [...ICON_SETS],
                 description: "nerd-font needs a Nerd Font patched font; emoji works anywhere (icon style only)",
             },
+            {
+                id: "usage",
+                label: "Usage guidance",
+                currentValue: usage,
+                values: [...USAGE_MODES],
+                description: "moderate: long-running / multi-step work only · aggressive: almost every task · changes the system prompt — takes effect after reload (/reload or a new session)",
+            },
         ];
         // Dialog chrome is drawn by frameDialog (rounded box + title in the top
         // border) in render() below — pi-tui has no bordered-box component, so
@@ -168,6 +191,13 @@ async function openSettingsScreen(ctx, deps) {
                 icons = newValue;
                 deps.setIconSet(newValue, ctx);
                 ctx.ui.notify(`checklist icons: ${ICON_SET_DESCRIPTIONS[newValue]}`, "info");
+            }
+            else if (id === "usage" && isUsageMode(newValue)) {
+                usage = newValue;
+                deps.setUsage(newValue, ctx);
+                // This setting is baked into the system prompt at load time —
+                // make the delayed-apply contract explicit in the notification.
+                ctx.ui.notify(`checklist usage guidance: ${USAGE_LABELS[newValue]} (takes effect after /reload or a new session)`, "info");
             }
             repaintPreview(theme);
             repaintHint(theme);
@@ -209,7 +239,7 @@ export function registerChecklistCommand(pi, deps) {
             if (lower.startsWith("settings ") || lower === "settings") {
                 const rest = lower.startsWith("settings ") ? lower.slice("settings ".length) : "";
                 const last = rest.split(/\s+/).pop() ?? "";
-                const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS].filter((m) => m.startsWith(last));
+                const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES].filter((m) => m.startsWith(last));
                 const base = rest.includes(" ") ? rest.slice(0, rest.lastIndexOf(" ") + 1) : "";
                 const values = candidates.map((m) => `settings ${base}${m}`);
                 return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
@@ -257,8 +287,17 @@ export function registerChecklistCommand(pi, deps) {
                     deps.setIconSet(action.iconSet, ctx);
                     applied.push(ICON_SET_DESCRIPTIONS[action.iconSet]);
                 }
+                if (action.usage) {
+                    deps.setUsage(action.usage, ctx);
+                    applied.push(USAGE_LABELS[action.usage]);
+                }
                 if (applied.length > 0) {
-                    ctx.ui.notify(`checklist settings: ${applied.join(" · ")}`, "info");
+                    if (action.usage) {
+                        ctx.ui.notify(`checklist settings: ${applied.join(" · ")} (usage guidance takes effect after /reload or a new session)`, "info");
+                    }
+                    else {
+                        ctx.ui.notify(`checklist settings: ${applied.join(" · ")}`, "info");
+                    }
                     return;
                 }
                 if (!ctx.hasUI) {

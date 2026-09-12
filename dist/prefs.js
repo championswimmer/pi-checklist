@@ -13,7 +13,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isDisplayMode, isIconSet, isStatusStyle } from "./types.js";
+import { isDisplayMode, isIconSet, isStatusStyle, isUsageMode } from "./types.js";
 const PREFS_FILE = "pi-checklist.json";
 /** Resolve the pi agent dir: `PI_CODING_AGENT_DIR` or `~/.pi/agent`. */
 export function resolveAgentDir() {
@@ -59,6 +59,8 @@ export function loadGlobalPrefs(agentDir) {
         out.statusStyle = v.statusStyle;
     if (isIconSet(v.iconSet))
         out.iconSet = v.iconSet;
+    if (isUsageMode(v.usage))
+        out.usage = v.usage;
     return out;
 }
 /** Save global prefs (best-effort, silent fail for ephemeral/read-only sessions). */

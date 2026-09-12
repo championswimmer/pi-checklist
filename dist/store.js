@@ -4,7 +4,7 @@
  *
  * No pi / TUI imports — testable with plain node.
  */
-import { CHECKLIST_TOOLS, isChecklistSnapshot, isDisplayMode, isIconSet, isStatusStyle, } from "./types.js";
+import { CHECKLIST_TOOLS, isChecklistSnapshot, isDisplayMode, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
 export const ID_PATTERN = /^[a-z0-9]{3}$/;
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"; // 36
 const RESERVED_IDS = new Set(["all"]);
@@ -109,6 +109,12 @@ export function resolveIconSet(snapshot) {
     if (isIconSet(snapshot.iconSet))
         return snapshot.iconSet;
     return "nerd-font";
+}
+/** Resolve the effective usage-guidance mode. Default "moderate". */
+export function resolveUsage(snapshot) {
+    if (isUsageMode(snapshot.usage))
+        return snapshot.usage;
+    return "moderate";
 }
 // ---------------------------------------------------------------------------
 // Views

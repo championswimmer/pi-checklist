@@ -16,10 +16,12 @@ import {
   type StatusStyle,
   type TaskView,
   type UpdateTaskInput,
+  type UsageMode,
   isChecklistSnapshot,
   isDisplayMode,
   isIconSet,
   isStatusStyle,
+  isUsageMode,
 } from "./types.js";
 
 export const ID_PATTERN = /^[a-z0-9]{3}$/;
@@ -141,6 +143,12 @@ export function resolveStatusStyle(snapshot: ChecklistSnapshot): StatusStyle {
 export function resolveIconSet(snapshot: ChecklistSnapshot): IconSet {
   if (isIconSet(snapshot.iconSet)) return snapshot.iconSet;
   return "nerd-font";
+}
+
+/** Resolve the effective usage-guidance mode. Default "moderate". */
+export function resolveUsage(snapshot: ChecklistSnapshot): UsageMode {
+  if (isUsageMode(snapshot.usage)) return snapshot.usage;
+  return "moderate";
 }
 
 // ---------------------------------------------------------------------------

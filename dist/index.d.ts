@@ -10,6 +10,11 @@
  * `~/.pi/agent`, mirroring pi's own getAgentDir), so they survive across
  * sessions; checklist tasks stay session-scoped.
  *
+ * Usage guidance (moderate | aggressive) also persists there, but it is
+ * baked into the injected system prompt, so it is captured once at
+ * extension load — change it and run /reload (or start a new session)
+ * for it to take effect.
+ *
  * Display modes (see /checklist settings):
  * - "statusbar": persistent widget below the input box + footer (default).
  * - "end-of-turn": widget above the input box, shown when a turn settles.

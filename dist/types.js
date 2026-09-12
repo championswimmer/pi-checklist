@@ -11,6 +11,10 @@ export const ICON_SETS = ["nerd-font", "emoji"];
 export function isIconSet(value) {
     return value === "nerd-font" || value === "emoji";
 }
+export const USAGE_MODES = ["moderate", "aggressive"];
+export function isUsageMode(value) {
+    return value === "moderate" || value === "aggressive";
+}
 /** Tool names that can carry a ChecklistSnapshot in result details. */
 export const CHECKLIST_TOOLS = new Set([
     "checklist_create",

@@ -1,7 +1,7 @@
 /** TUI surfaces: widget lines, footer text, tool renderers, /checklist overlay. */
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import type { Checklist, DisplayMode, IconSet, StatusStyle, TaskView } from "./types.js";
+import type { Checklist, DisplayMode, IconSet, StatusStyle, TaskView, UsageMode } from "./types.js";
 type ThemeBgName = Parameters<Theme["bg"]>[0];
 type ThemeFgName = Parameters<Theme["fg"]>[0];
 /** Display-ready status incl. the planned → ready/blocked split. */
@@ -47,6 +47,8 @@ export declare const STATUS_STYLE_LABELS: Record<StatusStyle, string>;
 export declare const STATUS_STYLE_DESCRIPTIONS: Record<StatusStyle, string>;
 export declare const ICON_SET_LABELS: Record<IconSet, string>;
 export declare const ICON_SET_DESCRIPTIONS: Record<IconSet, string>;
+export declare const USAGE_LABELS: Record<UsageMode, string>;
+export declare const USAGE_DESCRIPTIONS: Record<UsageMode, string>;
 /** Sample rows for the /checklist settings preview (uses a fake `abc` id). */
 export declare function previewLines(theme: Theme, opts: RenderOpts): string[];
 export declare function renderCreateCall(args: {

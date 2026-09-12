@@ -13,12 +13,13 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isDisplayMode, isIconSet, isStatusStyle, type DisplayMode, type IconSet, type StatusStyle } from "./types.js";
+import { isDisplayMode, isIconSet, isStatusStyle, isUsageMode, type DisplayMode, type IconSet, type StatusStyle, type UsageMode } from "./types.js";
 
 export interface GlobalPrefs {
   displayMode?: DisplayMode;
   statusStyle?: StatusStyle;
   iconSet?: IconSet;
+  usage?: UsageMode;
 }
 
 const PREFS_FILE = "pi-checklist.json";
@@ -61,6 +62,7 @@ export function loadGlobalPrefs(agentDir?: string): GlobalPrefs {
   if (isDisplayMode(v.displayMode)) out.displayMode = v.displayMode;
   if (isStatusStyle(v.statusStyle)) out.statusStyle = v.statusStyle;
   if (isIconSet(v.iconSet)) out.iconSet = v.iconSet;
+  if (isUsageMode(v.usage)) out.usage = v.usage;
   return out;
 }
 

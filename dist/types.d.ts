@@ -50,6 +50,22 @@ export declare function isStatusStyle(value: unknown): value is StatusStyle;
 export type IconSet = "nerd-font" | "emoji";
 export declare const ICON_SETS: readonly IconSet[];
 export declare function isIconSet(value: unknown): value is IconSet;
+/** How strongly the injected system prompt steers the agent toward using
+ * the checklist.
+ *
+ * - "moderate": use the checklist for long-running / multi-step work
+ *   (refactors, audits, multi-part features); skip it for quick one-shot
+ *   questions. Default — matches the original always-on hint.
+ * - "aggressive": use the checklist for almost every task, even small
+ *   ones; only trivial single-step questions go untracked.
+ *
+ * This changes the *system prompt*, so it is captured once when the
+ * extension loads; changing it mid-session only takes effect after a
+ * reload (/reload) or a new pi session.
+ */
+export type UsageMode = "moderate" | "aggressive";
+export declare const USAGE_MODES: readonly UsageMode[];
+export declare function isUsageMode(value: unknown): value is UsageMode;
 /** Versioned snapshot persisted in the session JSONL. */
 export interface ChecklistSnapshot {
     v: 1;
@@ -63,6 +79,9 @@ export interface ChecklistSnapshot {
     statusStyle?: StatusStyle;
     /** Preferred persist for icon set. Absent = default ("nerd-font"). */
     iconSet?: IconSet;
+    /** Usage-guidance strength for the injected system prompt.
+     * Absent = default ("moderate"). Applied only on extension reload. */
+    usage?: UsageMode;
 }
 /** Tool names that can carry a ChecklistSnapshot in result details. */
 export declare const CHECKLIST_TOOLS: ReadonlySet<string>;

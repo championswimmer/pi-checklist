@@ -2,7 +2,7 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { countsOf, resolveIconSet, resolveStatusStyle, sortViews, viewsOf } from "./store.js";
-import type { Checklist, ChecklistSnapshot, DisplayMode, IconSet, StatusStyle, TaskView } from "./types.js";
+import type { Checklist, ChecklistSnapshot, DisplayMode, IconSet, StatusStyle, TaskView, UsageMode } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Widget + footer (pure line builders; theme applied by the caller)
@@ -286,6 +286,16 @@ export const ICON_SET_LABELS: Record<IconSet, string> = {
 export const ICON_SET_DESCRIPTIONS: Record<IconSet, string> = {
   "nerd-font": "Nerd Font Octicons (sync / play / blocked / check / x). Needs a Nerd Font patched font.",
   emoji: "🔄 ▶️ ⛔ ✅ ❌. Double-width; works in any modern terminal.",
+};
+
+export const USAGE_LABELS: Record<UsageMode, string> = {
+  moderate: "moderate — long-running tasks only",
+  aggressive: "aggressive — almost every task",
+};
+
+export const USAGE_DESCRIPTIONS: Record<UsageMode, string> = {
+  moderate: "Hint steers you to the checklist for long-running / multi-step work only; quick one-shot questions go untracked.",
+  aggressive: "Hint steers you to the checklist for almost every task, even small ones; only trivial single-step questions go untracked.",
 };
 
 /** Sample rows for the /checklist settings preview (uses a fake `abc` id). */

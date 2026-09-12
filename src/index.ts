@@ -10,6 +10,11 @@
  * `~/.pi/agent`, mirroring pi's own getAgentDir), so they survive across
  * sessions; checklist tasks stay session-scoped.
  *
+ * Usage guidance (moderate | aggressive) also persists there, but it is
+ * baked into the injected system prompt, so it is captured once at
+ * extension load — change it and run /reload (or start a new session)
+ * for it to take effect.
+ *
  * Display modes (see /checklist settings):
  * - "statusbar": persistent widget below the input box + footer (default).
  * - "end-of-turn": widget above the input box, shown when a turn settles.
@@ -26,7 +31,7 @@ import {
   renderReadCall,
   renderUpdateCall,
 } from "./render.js";
-import { buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle } from "./store.js";
+import { buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveUsage } from "./store.js";
 import {
   CREATE_GUIDELINES,
   CREATE_SNIPPET,
@@ -41,7 +46,7 @@ import {
   executeRead,
   executeUpdate,
 } from "./tools.js";
-import type { ChecklistSnapshot, DisplayMode, IconSet, StatusStyle } from "./types.js";
+import type { ChecklistSnapshot, DisplayMode, IconSet, StatusStyle, UsageMode } from "./types.js";
 import type { RenderOpts } from "./render.js";
 
 const WIDGET_KEY = "checklist";
@@ -61,7 +66,13 @@ export default function (pi: ExtensionAPI) {
     displayMode: globalSeed.displayMode ?? "statusbar",
     statusStyle: globalSeed.statusStyle ?? "pill",
     iconSet: globalSeed.iconSet ?? "nerd-font",
+    usage: globalSeed.usage ?? "moderate",
   };
+  // The usage-guidance hint is baked into the system prompt, so it is
+  // captured ONCE here at extension load. setUsage below still persists the
+  // new value (snapshot + global prefs), but the injected hint keeps using
+  // this capture until the extension is reloaded (/reload / new session).
+  const usageGuidanceAtLoad: UsageMode = resolveUsage(state);
   // True between turn_start and turn_end/agent_settled. In "end-of-turn"
   // mode the widget stays hidden mid-turn and appears when the turn settles.
   let inTurn = false;
@@ -69,6 +80,7 @@ export default function (pi: ExtensionAPI) {
   const getDisplayMode = (): DisplayMode => resolveDisplayMode(state);
   const getStatusStyle = (): StatusStyle => resolveStatusStyle(state);
   const getIconSet = (): IconSet => resolveIconSet(state);
+  const getUsage = (): UsageMode => resolveUsage(state);
   const getRenderOpts = (): RenderOpts => ({ style: getStatusStyle(), iconSet: getIconSet() });
 
   function refreshUi(ctx: ExtensionContext): void {
@@ -123,7 +135,12 @@ export default function (pi: ExtensionAPI) {
 
   /** Write the current display prefs to the global file (best-effort). */
   function savePrefs(): void {
-    saveGlobalPrefs({ displayMode: getDisplayMode(), statusStyle: getStatusStyle(), iconSet: getIconSet() });
+    saveGlobalPrefs({
+      displayMode: getDisplayMode(),
+      statusStyle: getStatusStyle(),
+      iconSet: getIconSet(),
+      usage: getUsage(),
+    });
   }
 
   function reconstruct(ctx: ExtensionContext): void {
@@ -141,6 +158,7 @@ export default function (pi: ExtensionAPI) {
         displayMode: global.displayMode ?? resolveDisplayMode(loaded),
         statusStyle: global.statusStyle ?? resolveStatusStyle(loaded),
         iconSet: global.iconSet ?? resolveIconSet(loaded),
+        usage: global.usage ?? resolveUsage(loaded),
       };
     } catch {
       const global = loadGlobalPrefs();
@@ -150,6 +168,7 @@ export default function (pi: ExtensionAPI) {
         displayMode: global.displayMode ?? "statusbar",
         statusStyle: global.statusStyle ?? "pill",
         iconSet: global.iconSet ?? "nerd-font",
+        usage: global.usage ?? "moderate",
       };
     }
     refreshUi(ctx);
@@ -242,6 +261,15 @@ export default function (pi: ExtensionAPI) {
       savePrefs();
       refreshUi(ctx);
     },
+    getUsage,
+    setUsage: (usage: UsageMode, ctx: ExtensionContext) => {
+      // Persisted now (snapshot + global prefs), but the injected system
+      // prompt keeps the load-time capture until the extension reloads.
+      state = { ...state, usage };
+      persistSnapshot(state);
+      savePrefs();
+      refreshUi(ctx);
+    },
     getRenderOpts,
     clear: (ctx: ExtensionContext) => {
       state = {
@@ -251,6 +279,7 @@ export default function (pi: ExtensionAPI) {
         displayMode: getDisplayMode(),
         statusStyle: getStatusStyle(),
         iconSet: getIconSet(),
+        usage: getUsage(),
       };
       persistSnapshot(state);
       refreshUi(ctx);
@@ -277,10 +306,13 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_agent_start", async (event, ctx) => {
     void ctx;
-    // Minimal always-on hint so the agent knows the extension exists.
-    // Kept to one sentence; tool promptGuidelines carry the details.
+    // The hint uses usageGuidanceAtLoad (captured when the extension
+    // loaded), never getUsage(): changing /checklist settings mid-session
+    // must not silently rewrite the system prompt — it applies on reload.
     const hint =
-      "Checklist available: for any task that breaks into subtasks, track it with checklist_create/read/update and mark progress as you go.";
+      usageGuidanceAtLoad === "aggressive"
+        ? "Checklist expected: use checklist_create/read/update for almost every task, even small ones, and mark progress as you go. Only skip it for trivial single-step questions."
+        : "Checklist available: for long-running or multi-step work (refactors, audits, multi-part features), track it with checklist_create/read/update and mark progress as you go. Skip it for quick one-shot questions.";
     const checklist = state.checklist;
     const open =
       !!checklist &&

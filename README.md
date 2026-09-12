@@ -38,7 +38,7 @@ Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g.
 
 Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` (or `/checklist show`) pops the checklist up in a centered TUI dialog box (`/checklist clear` empties the list). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji`:
+The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` (or `/checklist show`) pops the checklist up in a centered TUI dialog box (`/checklist clear` empties the list). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
 
 Display placement:
 
@@ -57,9 +57,16 @@ Progress icons (for the `icon` style):
 - `nerd-font` — Nerd Font Octicons: sync / play / blocked / check-circle / x-circle (needs a Nerd Font patched font — get one at nerdfonts.com; default).
 - `emoji` — 🔄 ▶️ ⛔ ✅ ❌ (works anywhere).
 
+Usage guidance (how strongly the agent is steered toward the checklist):
+
+- `moderate` — the injected hint asks for the checklist on long-running / multi-step work (refactors, audits, multi-part features); quick one-shot questions go untracked (default).
+- `aggressive` — the hint asks for the checklist on almost every task, even small ones; only trivial single-step questions go untracked.
+
+Usage guidance is baked into the system prompt, so it is captured once when the extension loads — after changing it, run `/reload` or start a new pi session for it to take effect. The display settings above apply immediately.
+
 `/checklist hide` is shorthand for hidden mode.
 
-State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
+State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet` / `usage`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
 
 ## Install
 

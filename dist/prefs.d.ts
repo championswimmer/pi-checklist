@@ -1,8 +1,9 @@
-import { type DisplayMode, type IconSet, type StatusStyle } from "./types.js";
+import { type DisplayMode, type IconSet, type StatusStyle, type UsageMode } from "./types.js";
 export interface GlobalPrefs {
     displayMode?: DisplayMode;
     statusStyle?: StatusStyle;
     iconSet?: IconSet;
+    usage?: UsageMode;
 }
 /** Resolve the pi agent dir: `PI_CODING_AGENT_DIR` or `~/.pi/agent`. */
 export declare function resolveAgentDir(): string;

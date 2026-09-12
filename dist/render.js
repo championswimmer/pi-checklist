@@ -231,6 +231,14 @@ export const ICON_SET_DESCRIPTIONS = {
     "nerd-font": "Nerd Font Octicons (sync / play / blocked / check / x). Needs a Nerd Font patched font.",
     emoji: "🔄 ▶️ ⛔ ✅ ❌. Double-width; works in any modern terminal.",
 };
+export const USAGE_LABELS = {
+    moderate: "moderate — long-running tasks only",
+    aggressive: "aggressive — almost every task",
+};
+export const USAGE_DESCRIPTIONS = {
+    moderate: "Hint steers you to the checklist for long-running / multi-step work only; quick one-shot questions go untracked.",
+    aggressive: "Hint steers you to the checklist for almost every task, even small ones; only trivial single-step questions go untracked.",
+};
 /** Sample rows for the /checklist settings preview (uses a fake `abc` id). */
 export function previewLines(theme, opts) {
     const samples = [
