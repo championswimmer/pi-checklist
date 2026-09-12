@@ -73,9 +73,14 @@ Pi docs live in the installed package, not this repo:
 
 ### State that survives branch / resume
 
-Official pattern (from `todo.ts`): **do not use a sidecar file for session task state.** Persist a full snapshot in each tool result's `details`, then reconstruct by scanning `ctx.sessionManager.getBranch()` for the latest matching tool result. Re-run reconstruction on `session_start` and `session_tree`.
+Sessions are JSONL trees under `~/.pi/agent/sessions/`. **That file is the store.** Do not use a sidecar.
 
-`pi.appendEntry()` is for TUI-only custom entries that are **not** sent to the LLM. Prefer tool-result details so the model and the TUI share one source of truth.
+Write a versioned snapshot (`{ v: 1, checklist, widgetVisible }`) in two places on every mutation:
+
+1. Tool result `details` — official branching pattern (`extensions.md` State Management, `examples/extensions/todo.ts`). Not sent to the LLM.
+2. `pi.appendEntry("pi-checklist", snapshot)` — same JSONL, `type: "custom"`, also not sent to the LLM. Covers human commands (`/checklist clear`) that never produce a tool result.
+
+Reconstruct by walking `ctx.sessionManager.getBranch()` oldest → newest; last matching snapshot wins. **Never `getEntries()`** (that mixes other branches). Re-run on `session_start` (`/resume`) and `session_tree` (`/branch`, `/undo`). Compaction appends a summary; it does not delete old lines, so `getBranch()` still sees the snapshot. The LLM may forget it — re-inject a compact snippet on `before_agent_start`.
 
 ### TUI surfaces we will use
 

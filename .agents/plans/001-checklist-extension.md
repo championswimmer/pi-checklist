@@ -193,20 +193,80 @@ Returns every task (or the filter) with `ready` / `blockedBy` computed. Always c
 
 `promptGuidelines`: mark `ongoing` before starting work; mark `done` as soon as the work is actually done; `cancel` tasks that the new plan made irrelevant; never start a task whose `blockedBy` is non-empty.
 
-### Persistence (session-branch, not a file)
+### Persistence (the session JSONL itself)
 
-Follow `examples/extensions/todo.ts`:
+Yes — store the checklist **inside the session file**. That is the only durable, resume-safe, branch-safe place pi gives extensions.
 
-1. Every successful tool `execute` returns `details: { checklist }` — the **full snapshot**.
-2. In-memory `let checklist: Checklist | null` is the live copy.
-3. Reconstruct by scanning `ctx.sessionManager.getBranch()` **from the end** for the latest tool result whose name is one of `checklist_create | checklist_read | checklist_update` and whose `details.checklist` is present.
-4. Re-run reconstruction on `session_start` and `session_tree` so `/branch` and `/resume` stay correct.
+Pi sessions are append-only JSONL trees:
 
-Do **not** write a sidecar JSON file. Sidecars break branching and collide across sessions in the same cwd.
+```
+~/.pi/agent/sessions/--<cwd-path>--/<timestamp>_<uuid>.jsonl
+```
 
-`checklist_read` also writes `details` so a read after a compact still has a snapshot on the branch (harmless duplication).
+Each line is an entry with `id` / `parentId`. `/resume` reloads that file. `/branch` moves the leaf; it does **not** rewrite history. There is no extension API to hang a bag of data on the session header, and a sidecar file next to the repo would ignore branching and collide across sessions in the same cwd.
 
-Custom `pi.appendEntry()` is **not** used for the list itself — that path is TUI-only and invisible to the LLM. The widget reads the same in-memory snapshot the tools mutate.
+Two write channels, both land in the same JSONL:
+
+| Channel | JSONL entry | In LLM context? | Why we use it |
+|---|---|---|---|
+| Tool result `details` | `{ type: "message", message: { role: "toolResult", toolName, details } }` | **No** (`content` is; `details` is metadata) | Official pattern (`extensions.md` → State Management, `examples/extensions/todo.ts`). Every agent mutation already produces a tool result, so the snapshot rides along for free. |
+| `pi.appendEntry("pi-checklist", data)` | `{ type: "custom", customType: "pi-checklist", data }` | **No** | Same file, still on the tree (`parentId`). Needed for mutations that are **not** tool calls — `/checklist clear`, widget hide/show — and as a belt-and-braces snapshot after every tool mutation. No entry renderer → silent in the transcript. |
+
+Do **not** use `sendMessage` / `custom_message` for the snapshot. That path *is* sent to the LLM and would burn tokens on every resume.
+
+#### Snapshot shape
+
+```ts
+interface ChecklistSnapshot {
+  v: 1;
+  checklist: Checklist | null;  // null = cleared
+  widgetVisible?: boolean;      // persist /checklist hide across resume
+}
+```
+
+- Tool execute returns `details: snapshot` (also used by `renderResult`).
+- Then `pi.appendEntry("pi-checklist", snapshot)` so human-only commands and tool mutations share one reconstruct path.
+- In-memory `let state: ChecklistSnapshot` is the live copy the widget reads. Memory is a cache; the JSONL is the source of truth.
+
+#### Reconstruct (always from the current branch)
+
+Walk `ctx.sessionManager.getBranch()` **oldest → newest**, last matching snapshot wins:
+
+```ts
+function loadFromBranch(branch): ChecklistSnapshot {
+  let found: ChecklistSnapshot = { v: 1, checklist: null };
+  for (const entry of branch) {
+    if (entry.type === "custom" && entry.customType === "pi-checklist" && entry.data?.v === 1) {
+      found = entry.data;
+    } else if (
+      entry.type === "message" &&
+      entry.message.role === "toolResult" &&
+      CHECKLIST_TOOLS.has(entry.message.toolName) &&
+      entry.message.details?.v === 1
+    ) {
+      found = entry.message.details;
+    }
+  }
+  return found;
+}
+```
+
+Use **`getBranch()`**, never `getEntries()`. `getEntries()` is the whole tree (other branches included); the docs example for `appendEntry` uses it and that is wrong for `/branch`. Re-run on `session_start` (covers `/resume`, startup) and `session_tree` (covers `/branch`, `/undo`).
+
+#### Why this survives the things people worry about
+
+- **`/resume`**: the JSONL is reloaded; `session_start` rebuilds memory from the branch tip.
+- **`/branch` / `/undo`**: the leaf changes; `session_tree` rebuilds from *that* branch, so you get the snapshot that was true at that point in the tree, not the abandoned tip.
+- **Compaction**: compaction **appends** a summary entry. It does not delete old JSONL lines. `getBranch()` still walks through pre-compaction tool results and custom entries, so the checklist is not lost. The *LLM* may forget it (old tool `content` is summarized) — that is why `before_agent_start` re-injects a compact snippet.
+- **`/fork` / `/clone`**: new JSONL with copied entries (and `parentSession` in the header). Snapshots copy with the entries.
+- **Print / ephemeral sessions**: if `getSessionFile()` is null, JSONL writes are no-ops; in-memory still works for that process. Acceptable.
+
+#### What we will not do
+
+- Sidecar `.pi/checklist.json` / cwd file — ignores branch and resume of a different session.
+- `~/.pi/agent/checklist.json` global store — mixes projects.
+- Session-header mutation — no extension API, and the header has no `id`/`parentId` so it cannot be branch-scoped.
+- Replaying tool *arguments* to rebuild state — arguments are the intent, not the validated result (a rejected `ongoing` must not apply). Always persist the **post-mutation snapshot**.
 
 ### TUI
 
@@ -398,6 +458,8 @@ Keep `store.ts` free of `pi` / TUI imports so transitions can be unit-tested wit
 - `mode: "append"` keeps existing tasks and hashes new titles against the used-id set.
 - Reject ids that are not exactly 3 alphanumeric chars (`scaffold`, `t1`, `AB`).
 - `/branch` to a parent that had an older snapshot restores that snapshot (not the child tip).
+- Quit and `/resume` the same session: widget and `checklist_read` match the pre-quit list with no extra tool call.
+- `/checklist clear`, quit, `/resume`: list stays empty (custom entry path, not only tool `details`).
 - Empty list hides widget and footer.
 - Print mode (`PI_PRINT_MODE` / no TUI): tools still work, no throw on missing `ctx.ui`.
 - Widget refreshes after the turn even if the agent did not call a checklist tool this turn (stale-but-correct list still visible).
@@ -427,6 +489,6 @@ Keep `store.ts` free of `pi` / TUI imports so transitions can be unit-tested wit
 - `dependsOn: string[]` (coerce a single string at the tool boundary).
 - Task ids are exactly 3 lowercase alphanumeric chars, generated by FNV-1a of the normalized title (base36, salt on collision). Optional explicit id on create for same-batch DAGs. Ids are frozen.
 - `done` is terminal; `cancelled` can reopen to `planned`.
-- Snapshot in tool `details`, reconstruct from the session branch.
+- Persist inside the session JSONL: tool result `details` + `pi.appendEntry("pi-checklist", snapshot)`. Reconstruct from `getBranch()`, never `getEntries()` or a sidecar file.
 - Widget `belowEditor` + footer `☑ n/m` + `/checklist` overlay.
-- Session-scoped only.
+- Session-scoped only (resume of *this* session, not a cross-session store).
