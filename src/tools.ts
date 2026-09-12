@@ -1,6 +1,6 @@
 /** Tool schemas, guidelines, and execute logic for pi-checklist. */
 import { StringEnum } from "@earendil-works/pi-ai";
-import { Type } from "typebox";
+import { Type, type TSchema } from "typebox";
 import { applyUpdates, countsOf, createOrAppend, formatTaskLine, sortViews, viewsOf } from "./store.js";
 import type {
   Checklist,
@@ -22,7 +22,7 @@ const DependsOn = Type.Optional(
   }),
 );
 
-export const ChecklistCreateParams = Type.Object({
+export const ChecklistCreateParams: TSchema = Type.Object({
   title: Type.Optional(Type.String({ description: "Optional session/goal name shown in the widget header" })),
   mode: Type.Optional(
     StringEnum(["replace", "append"] as const, { description: 'replace (default) wipes the list; append adds to it' }),
@@ -38,7 +38,7 @@ export const ChecklistCreateParams = Type.Object({
   ),
 });
 
-export const ChecklistReadParams = Type.Object({
+export const ChecklistReadParams: TSchema = Type.Object({
   status: Type.Optional(
     StringEnum(["planned", "ongoing", "done", "cancelled"] as const, {
       description: "Optional status filter",
@@ -47,7 +47,7 @@ export const ChecklistReadParams = Type.Object({
   includeDone: Type.Optional(Type.Boolean({ description: "Include done tasks (default true)" })),
 });
 
-export const ChecklistUpdateParams = Type.Object({
+export const ChecklistUpdateParams: TSchema = Type.Object({
   updates: Type.Array(
     Type.Object({
       id: Type.String({ description: '3-char task id from checklist_create/read (e.g. "k7q")' }),

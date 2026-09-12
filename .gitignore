@@ -1,3 +1,8 @@
+# NOTE: dist/ is intentionally TRACKED (not ignored). pi installs git packages
+# with `npm install --omit=dev` and no build step, so ./dist/index.js must
+# exist in the clone. Rebuild it with `npm run build` before every commit
+# that touches src/ (and `prepublishOnly` rebuilds it again on publish).
+
 # macOS
 .DS_Store
 

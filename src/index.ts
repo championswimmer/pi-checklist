@@ -198,10 +198,16 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_agent_start", async (event, ctx) => {
     void ctx;
+    // Minimal always-on hint so the agent knows the extension exists.
+    // Kept to one sentence; tool promptGuidelines carry the details.
+    const hint =
+      "Checklist available: for any task that breaks into subtasks, track it with checklist_create/read/update and mark progress as you go.";
     const checklist = state.checklist;
-    if (!checklist || checklist.tasks.length === 0) return;
-    const open = checklist.tasks.some((t) => t.status === "planned" || t.status === "ongoing");
-    if (!open) return;
-    return { systemPrompt: `${event.systemPrompt}\n\n${buildInjectSnippet(checklist)}` };
+    const open =
+      !!checklist &&
+      checklist.tasks.length > 0 &&
+      checklist.tasks.some((t) => t.status === "planned" || t.status === "ongoing");
+    const extra = open ? ` ${buildInjectSnippet(checklist!)}` : "";
+    return { systemPrompt: `${event.systemPrompt}\n\n${hint}${extra}` };
   });
 }

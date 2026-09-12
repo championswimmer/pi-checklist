@@ -68,8 +68,8 @@ Pi docs live in the installed package, not this repo:
 - Entry point: `export default function (pi: ExtensionAPI) { ... }`.
 - Available imports without installing deps: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`, `typebox`. Import **types only** from pi packages when possible — runtime imports of pi internals are fragile.
 - For a distributable package, list those four in `peerDependencies` with `"*"` and put any real runtime deps in `dependencies`. Add `"keywords": ["pi-package"]`.
-- Local testing: `pi -e ./src/index.ts`. Auto-discovery: symlink into `~/.pi/agent/extensions/` (global, `/reload`) or `.pi/extensions/` (project-local, needs trust).
-- Install as a package: `pi install git:github.com/championswimmer/pi-checklist` or `pi install npm:@championswimmer/pi-checklist` once published.
+- Local testing: `pi -e ./dist/index.js` (built output, what ships) or `pi -e ./src/index.ts` (sources, no rebuild). Rebuild with `npm run build` before testing dist. Auto-discovery: symlink into `~/.pi/agent/extensions/` (global, `/reload`) or `.pi/extensions/` (project-local, needs trust).
+- Install as a package: `pi install git:github.com/championswimmer/pi-checklist` or `pi install npm:pi-checklist` once published.
 
 ### State that survives branch / resume
 
@@ -103,10 +103,13 @@ Reconstruct by walking `ctx.sessionManager.getBranch()` oldest → newest; last 
 - [x] Extension implemented (`package.json`, `src/types.ts`, `src/store.ts`, `src/tools.ts`, `src/render.ts`, `src/commands.ts`, `src/index.ts`)
 - [x] GitHub repo created and pushed (`championswimmer/pi-checklist`)
 - [x] Smoke-tested with `pi -e` (print-mode tool round-trip; store unit checks via jiti; wiring checks via mocked pi; `tsc --noEmit` clean)
+- [x] Release-ready (plan 002): package renamed to unscoped `pi-checklist` v0.1.0, `tsc` build (`tsconfig.json`, `npm run build`) emitting `dist/`, manifest/main/exports pointing at `./dist/index.js`, npm `files` whitelist + `.npmignore` so the tarball ships built JS only (no `src/*.ts`)
+- [x] `dist/` committed to git on purpose: pi installs git packages with `npm install --omit=dev` and no build step, so git installs need built files in the clone. Rebuild before every src-touching commit; `prepublishOnly` rebuilds again on publish
+- [x] Footgun fixed: exported tool param schemas are annotated `: TSchema` (type-only import from `typebox`) — otherwise declaration emit fails with TS2742 because `StringEnum` (from `@earendil-works/pi-ai`) brands types with pi's nested typebox copy
 - [ ] TUI widget/footer/overlay eyeballed in an interactive session
 
 ## Publishing notes
 
 - GitHub repo: `https://github.com/championswimmer/pi-checklist`
-- Prefer a scoped npm name (`@championswimmer/pi-checklist`) if the unscoped name is taken; check before first publish.
+- npm name is `pi-checklist` (unscoped), v0.1.0; `publishConfig.access = "public"` kept (harmless unscoped).
 - `publishConfig.access = "public"` if scoped.

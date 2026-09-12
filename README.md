@@ -38,7 +38,7 @@ Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g.
 
 Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` opens a full overlay (`/checklist clear` empties the list). Three display modes are available via `/checklist settings` (or `/checklist settings <mode>`):
+The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` (or `/checklist show`) pops the checklist up in a centered TUI dialog box (`/checklist clear` empties the list). Three display modes are available via `/checklist settings` (or `/checklist settings <mode>`):
 
 - `statusbar` — persistent widget below the input box + footer (default).
 - `end-of-turn` — widget above the input box, refreshed when each turn settles.
@@ -50,13 +50,26 @@ State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so 
 
 ## Install
 
-**Quick one-off test:**
+**From npm (release):**
 
 ```sh
-pi -e ./src/index.ts
+pi install npm:pi-checklist
 ```
 
-**Development (symlink into pi's global extensions dir):**
+**From git:**
+
+```sh
+pi install git:github.com/championswimmer/pi-checklist
+```
+
+**Quick one-off test (built output — this is what ships):**
+
+```sh
+npm run build
+pi -e ./dist/index.js
+```
+
+**Development (symlink sources for hot-reload, no rebuild needed):**
 
 ```sh
 mkdir -p ~/.pi/agent/extensions
@@ -65,8 +78,16 @@ ln -s "$(pwd)/src/index.ts" ~/.pi/agent/extensions/pi-checklist.ts
 
 Hot-reload inside pi with `/reload`.
 
-**As a package:**
+## Developing / releasing
 
-```sh
-pi install git:github.com/championswimmer/pi-checklist
-```
+- Sources live in `src/`; the published + git-installed entry is the
+  built output `dist/index.js` (`npm run build`, TypeScript).
+- `dist/` is intentionally committed: pi installs git packages with
+  `npm install --omit=dev` and no build step, so the built files must
+  exist in the clone. Rebuild (`npm run build`) before every commit
+  that touches `src/`.
+- The npm tarball is a whitelist (`files` in package.json: `dist`,
+  `README.md`, `LICENSE`) plus `.npmignore` as backup — no `.ts`
+  sources ship, so pi loads plain JS without jiti transpiling.
+- Release flow: bump `version` in package.json → `npm run build` →
+  commit (including `dist/`) → tag `vX.Y.Z` → `npm publish`.
