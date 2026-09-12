@@ -38,11 +38,24 @@ Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g.
 
 Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` (or `/checklist show`) pops the checklist up in a centered TUI dialog box (`/checklist clear` empties the list). Three display modes are available via `/checklist settings` (or `/checklist settings <mode>`):
+The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` (or `/checklist show`) pops the checklist up in a centered TUI dialog box (`/checklist clear` empties the list). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji`:
+
+Display placement:
 
 - `statusbar` — persistent widget below the input box + footer (default).
 - `end-of-turn` — widget above the input box, refreshed when each turn settles.
 - `hidden` — no widget or footer; reopen with `/checklist` (overlay) or `/checklist show`.
+
+Progress status style:
+
+- `color` — rows are only color-coded, no status word.
+- `pill` — the status word is a pill: text on a colored background (default).
+- `icon` — status is a leading progress icon only, no status word.
+
+Progress icons (for the `icon` style):
+
+- `nerd-font` — Nerd Font Octicons: sync / play / blocked / check-circle / x-circle (needs a Nerd Font patched font — get one at nerdfonts.com; default).
+- `emoji` — 🔄 ▶️ ⛔ ✅ ❌ (works anywhere).
 
 `/checklist hide` is shorthand for hidden mode.
 

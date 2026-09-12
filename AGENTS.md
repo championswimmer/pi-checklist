@@ -106,10 +106,11 @@ Reconstruct by walking `ctx.sessionManager.getBranch()` oldest → newest; last 
 - [x] Release-ready (plan 002): package renamed to unscoped `pi-checklist` v0.1.0, `tsc` build (`tsconfig.json`, `npm run build`) emitting `dist/`, manifest/main/exports pointing at `./dist/index.js`, npm `files` whitelist + `.npmignore` so the tarball ships built JS only (no `src/*.ts`)
 - [x] `dist/` committed to git on purpose: pi installs git packages with `npm install --omit=dev` and no build step, so git installs need built files in the clone. Rebuild before every src-touching commit; `prepublishOnly` rebuilds again on publish
 - [x] Footgun fixed: exported tool param schemas are annotated `: TSchema` (type-only import from `typebox`) — otherwise declaration emit fails with TS2742 because `StringEnum` (from `@earendil-works/pi-ai`) brands types with pi's nested typebox copy
+- [x] Settings upgrade (plan 003): `/checklist settings` is one `SettingsList` screen (display / progress style / progress icons) with live preview + quick-set (`/checklist settings [display] [style] [icons]`); status styles `color`/`pill`/`icon`, pill = text on `theme.bg` background, icon sets `nerd-font` (NF Octicons U+F46A/F500/F479/F4A4/F530) vs `emoji` (🔄▶️⛔✅❌); prefs persisted on snapshot, widget/transcript/overlay all honor them (28-check smoke ALL PASS); settings is a rounded-corner bordered overlay dialog (frameDialog in render.ts — pi-tui has no bordered box, dialogs draw ╭─╮/│/╰─╯ chrome themselves) with a nerdfonts.com hint under the icons row
 - [ ] TUI widget/footer/overlay eyeballed in an interactive session
 
 ## Publishing notes
 
 - GitHub repo: `https://github.com/championswimmer/pi-checklist`
-- npm name is `pi-checklist` (unscoped), v0.1.0; `publishConfig.access = "public"` kept (harmless unscoped).
+- npm name is `pi-checklist` (unscoped), v0.1.1; `publishConfig.access = "public"` kept (harmless unscoped).
 - `publishConfig.access = "public"` if scoped.

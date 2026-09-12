@@ -12,10 +12,14 @@ import {
   type DisplayMode,
   type Task,
   type TaskStatus,
+  type IconSet,
+  type StatusStyle,
   type TaskView,
   type UpdateTaskInput,
   isChecklistSnapshot,
   isDisplayMode,
+  isIconSet,
+  isStatusStyle,
 } from "./types.js";
 
 export const ID_PATTERN = /^[a-z0-9]{3}$/;
@@ -124,6 +128,19 @@ export function resolveDisplayMode(snapshot: ChecklistSnapshot): DisplayMode {
   if (isDisplayMode(snapshot.displayMode)) return snapshot.displayMode;
   if (snapshot.widgetVisible === false) return "hidden";
   return "statusbar";
+}
+
+/** Resolve the effective status style. Default "pill" preserves the
+ * long-standing status-word look (now rendered on a colored background). */
+export function resolveStatusStyle(snapshot: ChecklistSnapshot): StatusStyle {
+  if (isStatusStyle(snapshot.statusStyle)) return snapshot.statusStyle;
+  return "pill";
+}
+
+/** Resolve the effective icon set. Default "nerd-font" (Nerd Font glyphs). */
+export function resolveIconSet(snapshot: ChecklistSnapshot): IconSet {
+  if (isIconSet(snapshot.iconSet)) return snapshot.iconSet;
+  return "nerd-font";
 }
 
 // ---------------------------------------------------------------------------

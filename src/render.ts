@@ -1,19 +1,129 @@
 /** TUI surfaces: widget lines, footer text, tool renderers, /checklist overlay. */
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
-import { countsOf, sortViews, viewsOf } from "./store.js";
-import type { Checklist, ChecklistSnapshot, DisplayMode, TaskView } from "./types.js";
+import { matchesKey, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { countsOf, resolveIconSet, resolveStatusStyle, sortViews, viewsOf } from "./store.js";
+import type { Checklist, ChecklistSnapshot, DisplayMode, IconSet, StatusStyle, TaskView } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Widget + footer (pure line builders; theme applied by the caller)
 // ---------------------------------------------------------------------------
 
-const GLYPHS: Record<TaskView["status"], string> = {
+type ThemeBgName = Parameters<Theme["bg"]>[0];
+type ThemeFgName = Parameters<Theme["fg"]>[0];
+
+/** Classic geometric glyphs (no special font needed). Ready keeps the hollow
+ * circle; blocked gets ⊘ (U+2298, "prohibited") so the two planned splits
+ * are distinguishable even without color. Both are single-cell and ship in
+ * virtually all monospace fonts. */
+const CLASSIC_GLYPHS: Record<TaskView["status"], string> = {
   ongoing: "●",
   planned: "○",
   done: "✓",
   cancelled: "✕",
 };
+
+const CLASSIC_READY = "○";
+const CLASSIC_BLOCKED = "⊘";
+
+/** Nerd Font Octicons (single-cell; needs a Nerd Font in the terminal).
+ * Codepoints are the Nerd Fonts target column of
+ * nerd-fonts `src/glyphs/octicons/mapping` (e.g. sync F087 -> F46A). */
+const NF_GLYPHS = {
+  ongoing: "\uF46A", // oct-sync — in progress
+  // oct-play (F2D3 -> F500) — ready to start. Note: F4FF looks close but is
+  // oct-person-fill (a human icon), not play.
+  ready: "\uF500",
+  blocked: "\uF479", // oct-blocked — waiting on deps
+  done: "\uF4A4", // oct-check-circle-fill — finished
+  cancelled: "\uF530", // oct-x-circle-fill — dropped
+} as const;
+
+/** Emoji artwork (double-width; works in any modern terminal). */
+const EMOJI_GLYPHS = {
+  ongoing: "🔄",
+  ready: "▶️",
+  blocked: "⛔",
+  done: "✅",
+  cancelled: "❌",
+} as const;
+
+/** Display-ready status incl. the planned → ready/blocked split. */
+export type StatusKind = "ongoing" | "ready" | "blocked" | "done" | "cancelled";
+
+export interface RenderOpts {
+  style: StatusStyle;
+  iconSet: IconSet;
+}
+
+export const DEFAULT_RENDER_OPTS: RenderOpts = { style: "pill", iconSet: "nerd-font" };
+
+export function statusKindOf(v: TaskView): StatusKind {
+  if (v.status === "ongoing") return "ongoing";
+  if (v.status === "done") return "done";
+  if (v.status === "cancelled") return "cancelled";
+  return v.blocked ? "blocked" : "ready";
+}
+
+export function glyphFor(kind: StatusKind, opts: RenderOpts): string {
+  if (opts.style === "icon") {
+    const set = opts.iconSet === "emoji" ? EMOJI_GLYPHS : NF_GLYPHS;
+    return set[kind];
+  }
+  switch (kind) {
+    case "ongoing":
+      return CLASSIC_GLYPHS.ongoing;
+    case "done":
+      return CLASSIC_GLYPHS.done;
+    case "cancelled":
+      return CLASSIC_GLYPHS.cancelled;
+    case "ready":
+      return CLASSIC_READY;
+    case "blocked":
+      return CLASSIC_BLOCKED;
+  }
+}
+
+export interface StatusPill {
+  label: string;
+  bg: ThemeBgName;
+  fg: ThemeFgName;
+}
+
+export function pillFor(kind: StatusKind): StatusPill {
+  switch (kind) {
+    case "ongoing":
+      return { label: "PROG", bg: "toolPendingBg", fg: "warning" };
+    case "ready":
+      return { label: "REDY", bg: "selectedBg", fg: "accent" };
+    case "blocked":
+      return { label: "BLCK", bg: "toolErrorBg", fg: "error" };
+    case "done":
+      return { label: "DONE", bg: "toolSuccessBg", fg: "success" };
+    case "cancelled":
+      return { label: "DROP", bg: "customMessageBg", fg: "dim" };
+  }
+}
+
+/** A status pill: the label as text on a colored background. */
+export function paintPill(theme: Theme, pill: StatusPill): string {
+  return theme.bg(pill.bg, theme.bold(theme.fg(pill.fg, ` ${pill.label} `)));
+}
+
+/** Row color per status kind (glyph + title, every style). */
+export function colorFor(kind: StatusKind): ThemeFgName {
+  switch (kind) {
+    case "ongoing":
+      return "warning";
+    case "ready":
+      return "text";
+    case "blocked":
+      return "dim";
+    case "done":
+      return "success";
+    case "cancelled":
+      return "dim";
+  }
+}
 
 export function footerText(checklist: Checklist | null): string | undefined {
   if (!checklist || checklist.tasks.length === 0) return undefined;
@@ -22,14 +132,17 @@ export function footerText(checklist: Checklist | null): string | undefined {
 }
 
 export interface WidgetLine {
+  /** Base row text (glyph + id + title + blocked deps). Never embeds the pill. */
   text: string;
   kind: "header" | "ongoing" | "planned" | "ready" | "blocked" | "done" | "cancelled" | "summary";
+  /** Present on task rows; painted as text-on-background when style is "pill". */
+  pill?: StatusPill;
 }
 
 /** Max task rows before done/cancelled collapse to a count. */
 export const WIDGET_MAX_LINES = 16;
 
-export function widgetLines(checklist: Checklist): WidgetLine[] {
+export function widgetLines(checklist: Checklist, opts: RenderOpts = DEFAULT_RENDER_OPTS): WidgetLine[] {
   const views = sortViews(viewsOf(checklist));
   const c = countsOf(checklist);
   const lines: WidgetLine[] = [];
@@ -39,21 +152,25 @@ export function widgetLines(checklist: Checklist): WidgetLine[] {
     text: `checklist${title}  ${c.done}/${c.total} done   ${c.ongoing} ongoing   ${c.ready} ready   ${c.blocked} blocked`,
   });
 
+  const rowFor = (v: TaskView): WidgetLine => {
+    const kind = statusKindOf(v);
+    const glyph = glyphFor(kind, opts);
+    const deps = v.blocked ? ` ← ${v.blockedBy.join(", ")}` : "";
+    return { kind, text: `${glyph} ${v.id}  ${v.title}${deps}`, pill: pillFor(kind) };
+  };
+
   const active = views.filter((v) => v.status === "ongoing" || v.status === "planned");
   const finished = views.filter((v) => v.status === "done" || v.status === "cancelled");
   const room = WIDGET_MAX_LINES - 1; // header takes one
 
   for (const v of active.slice(0, room)) {
-    const glyph = v.status === "ongoing" ? GLYPHS.ongoing : GLYPHS.planned;
-    const state = v.status === "ongoing" ? "ongoing" : v.blocked ? `blocked ← ${v.blockedBy.join(", ")}` : "ready";
-    lines.push({ kind: v.status === "ongoing" ? "ongoing" : v.blocked ? "blocked" : "ready", text: `${glyph} ${v.id}  ${v.title}  ${state}` });
+    lines.push(rowFor(v));
   }
   const shownActive = Math.min(active.length, room);
   const remaining = room - shownActive;
   const shownFinished = finished.slice(0, Math.max(0, remaining));
   for (const v of shownFinished) {
-    const glyph = GLYPHS[v.status];
-    lines.push({ kind: v.status, text: `${glyph} ${v.id}  ${v.title}  ${v.status}` });
+    lines.push(rowFor(v));
   }
   const hiddenFinished = finished.length - shownFinished.length;
   const hiddenActive = active.length - shownActive;
@@ -69,7 +186,7 @@ export function widgetLines(checklist: Checklist): WidgetLine[] {
   return lines;
 }
 
-function paintLine(line: WidgetLine, theme: Theme, width: number): string {
+function paintLine(line: WidgetLine, theme: Theme, width: number, style: StatusStyle = "pill"): string {
   const raw = line.text;
   let colored: string;
   switch (line.kind) {
@@ -96,11 +213,41 @@ function paintLine(line: WidgetLine, theme: Theme, width: number): string {
       colored = theme.fg("dim", raw);
       break;
   }
+  if (style === "pill" && line.pill) {
+    colored = `${paintPill(theme, line.pill)}  ${colored}`;
+  }
   return truncateToWidth(colored, width);
 }
 
-export function paintWidget(checklist: Checklist, theme: Theme, width: number): string[] {
-  return widgetLines(checklist).map((l) => paintLine(l, theme, width));
+export function paintWidget(
+  checklist: Checklist,
+  theme: Theme,
+  width: number,
+  opts: RenderOpts = DEFAULT_RENDER_OPTS,
+): string[] {
+  return widgetLines(checklist, opts).map((l) => paintLine(l, theme, width, opts.style));
+}
+
+/** Frame pre-rendered lines as a rounded dialog box with the title set into
+ * the top border. pi-tui has no bordered-box component (Box is only
+ * padding + background), so dialogs draw their own chrome — same pattern as
+ * the overlay-qa-tests example in the pi repo. Every returned line is
+ * exactly `width` cells wide (borders included). */
+export function frameDialog(title: string, inner: string[], width: number, theme: Theme): string[] {
+  const innerW = Math.max(1, width - 2);
+  const border = (s: string) => theme.fg("border", s);
+  const titleStr = truncateToWidth(` ${title} `, innerW);
+  const titleW = visibleWidth(titleStr);
+  const left = Math.max(0, Math.floor((innerW - titleW) / 2));
+  const right = Math.max(0, innerW - titleW - left);
+  const out: string[] = [
+    border(`╭${"─".repeat(left)}`) + theme.fg("accent", titleStr) + border(`${"─".repeat(right)}╮`),
+  ];
+  for (const line of inner) {
+    out.push(border("│") + truncateToWidth(line, innerW, "...", true) + border("│"));
+  }
+  out.push(border(`╰${"─".repeat(innerW)}╯`));
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +265,43 @@ export const DISPLAY_MODE_DESCRIPTIONS: Record<DisplayMode, string> = {
   "end-of-turn": "Widget above the input box, refreshed when each turn settles.",
   hidden: "No widget or footer. Open with /checklist (overlay) or /checklist show.",
 };
+
+export const STATUS_STYLE_LABELS: Record<StatusStyle, string> = {
+  color: "color — color-coded rows only",
+  pill: "pill — status on a colored background",
+  icon: "icon — progress icon only",
+};
+
+export const STATUS_STYLE_DESCRIPTIONS: Record<StatusStyle, string> = {
+  color: "Rows are only color-coded. No status word is shown.",
+  pill: "The status word is a pill: text on a colored background.",
+  icon: "Status is a leading icon only. Pick the artwork below.",
+};
+
+export const ICON_SET_LABELS: Record<IconSet, string> = {
+  "nerd-font": "nerd-font — Nerd Font glyphs",
+  emoji: "emoji — emoji glyphs",
+};
+
+export const ICON_SET_DESCRIPTIONS: Record<IconSet, string> = {
+  "nerd-font": "Nerd Font Octicons (sync / play / blocked / check / x). Needs a Nerd Font patched font.",
+  emoji: "🔄 ▶️ ⛔ ✅ ❌. Double-width; works in any modern terminal.",
+};
+
+/** Sample rows for the /checklist settings preview (uses a fake `abc` id). */
+export function previewLines(theme: Theme, opts: RenderOpts): string[] {
+  const samples: Array<{ kind: StatusKind; title: string }> = [
+    { kind: "ongoing", title: "Write the widget" },
+    { kind: "ready", title: "Update the docs" },
+    { kind: "blocked", title: "Publish release" },
+    { kind: "done", title: "Scaffold repo" },
+    { kind: "cancelled", title: "Drop the prototype" },
+  ];
+  return samples.map(({ kind, title }) => {
+    const row = theme.fg(colorFor(kind), `${glyphFor(kind, opts)} abc ${title}`);
+    return opts.style === "pill" ? `${paintPill(theme, pillFor(kind))}  ${row}` : row;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Tool transcript renderers (compact themed rows)
@@ -154,13 +338,14 @@ export function renderChecklistResult(
   }
   const checklist = details.checklist;
   const c = countsOf(checklist);
+  const opts: RenderOpts = { style: resolveStatusStyle(details), iconSet: resolveIconSet(details) };
   const summary = theme.fg("muted", `${c.done}/${c.total} done`) + theme.fg("dim", `  ${c.ongoing} ongoing  ${c.ready} ready  ${c.blocked} blocked`);
   if (!expanded) return new Text(summary, 0, 0);
   const views = sortViews(viewsOf(checklist)).slice(0, 10);
   const rows = views.map((v) => {
-    const glyph = GLYPHS[v.status];
-    const color = v.status === "done" ? "success" : v.status === "ongoing" ? "warning" : v.status === "cancelled" ? "dim" : "text";
-    return theme.fg(color, `${glyph} ${v.id} ${v.title}`);
+    const kind = statusKindOf(v);
+    const row = theme.fg(colorFor(kind), `${glyphFor(kind, opts)} ${v.id} ${v.title}${v.blocked ? ` ← ${v.blockedBy.join(", ")}` : ""}`);
+    return opts.style === "pill" ? `${paintPill(theme, pillFor(kind))}  ${row}` : row;
   });
   return new Text(`${summary}\n${rows.join("\n")}`, 0, 0);
 }
@@ -179,15 +364,17 @@ export class ChecklistOverlay {
   private title?: string;
   private theme: Theme;
   private cb: OverlayCallbacks;
+  private opts: RenderOpts;
   private selected = 0;
   private cachedWidth?: number;
   private cachedLines?: string[];
 
-  constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks) {
+  constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks, opts: RenderOpts = DEFAULT_RENDER_OPTS) {
     this.views = checklist ? sortViews(viewsOf(checklist)) : [];
     this.title = checklist?.title;
     this.theme = theme;
     this.cb = cb;
+    this.opts = opts;
   }
 
   handleInput(data: string): void {
@@ -229,14 +416,18 @@ export class ChecklistOverlay {
       lines.push(truncateToWidth(`  ${th.fg("muted", `${done}/${counts} done`)}`, width));
       lines.push("");
       this.views.forEach((v, i) => {
+        const kind = statusKindOf(v);
         const cursor = i === this.selected ? th.fg("accent", "› ") : "  ";
-        const glyph = GLYPHS[v.status];
-        const glyphColor = v.status === "done" ? "success" : v.status === "ongoing" ? "warning" : "dim";
+        const glyph = th.fg(colorFor(kind), glyphFor(kind, this.opts));
         const id = th.fg("accent", v.id);
-        const text = v.status === "done" || v.status === "cancelled" ? th.fg("dim", v.title) : th.fg("text", v.title);
-        const state = v.status === "ongoing" ? th.fg("warning", " ongoing") : v.blocked ? th.fg("dim", ` blocked ← ${v.blockedBy.join(", ")}`) : v.ready ? th.fg("success", " ready") : th.fg("dim", ` ${v.status}`);
-        const dep = v.dependsOn.length > 0 && !v.blocked ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`) : "";
-        lines.push(truncateToWidth(`${cursor}${th.fg(glyphColor, glyph)} ${id} ${text}${state}${dep}`, width));
+        const title = v.status === "done" || v.status === "cancelled" ? th.fg("dim", v.title) : th.fg("text", v.title);
+        const state = this.opts.style === "pill" ? `${paintPill(th, pillFor(kind))}  ` : "";
+        const dep = v.blocked
+          ? th.fg("dim", ` ← ${v.blockedBy.join(", ")}`)
+          : v.dependsOn.length > 0
+            ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`)
+            : "";
+        lines.push(truncateToWidth(`${cursor}${state}${glyph} ${id} ${title}${dep}`, width));
       });
     }
     lines.push("");

@@ -1,6 +1,7 @@
-/** /checklist command: overlay + display-mode settings + show/hide/clear. */
+/** /checklist command: overlay + settings (display / style / icons) + show/hide/clear. */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { type DisplayMode } from "./types.js";
+import { type RenderOpts } from "./render.js";
+import { type DisplayMode, type IconSet, type StatusStyle } from "./types.js";
 export type ChecklistAction = {
     name: "open";
 } | {
@@ -11,17 +12,29 @@ export type ChecklistAction = {
     name: "clear";
 } | {
     name: "settings";
-    mode?: DisplayMode;
+    displayMode?: DisplayMode;
+    statusStyle?: StatusStyle;
+    iconSet?: IconSet;
 } | {
     name: "help";
 };
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
 export declare function normalizeDisplayMode(raw: string): DisplayMode | undefined;
+/** Normalize a user-typed style word to a StatusStyle (accepts shorthands). */
+export declare function normalizeStatusStyle(raw: string): StatusStyle | undefined;
+/** Normalize a user-typed icon-set word to an IconSet (accepts shorthands). */
+export declare function normalizeIconSet(raw: string): IconSet | undefined;
 export declare function parseChecklistArgs(raw: string): ChecklistAction;
-export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden]]";
-export declare function registerChecklistCommand(pi: ExtensionAPI, deps: {
+export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji]]";
+export interface ChecklistCommandDeps {
     getDisplayMode: () => DisplayMode;
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
+    getStatusStyle: () => StatusStyle;
+    setStatusStyle: (style: StatusStyle, ctx: ExtensionCommandContext) => void;
+    getIconSet: () => IconSet;
+    setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void;
+    getRenderOpts: () => RenderOpts;
     clear: (ctx: ExtensionCommandContext) => void;
     getChecklist: () => import("./types.js").Checklist | null;
-}): void;
+}
+export declare function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistCommandDeps): void;

@@ -4,7 +4,7 @@
  *
  * No pi / TUI imports — testable with plain node.
  */
-import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Task, type TaskStatus, type TaskView, type UpdateTaskInput } from "./types.js";
+import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Task, type TaskStatus, type IconSet, type StatusStyle, type TaskView, type UpdateTaskInput } from "./types.js";
 export declare const ID_PATTERN: RegExp;
 export declare const TASK_STATUSES: readonly TaskStatus[];
 export declare function normalizeTitleKey(title: string): string;
@@ -17,6 +17,11 @@ export declare function canTransition(from: TaskStatus, to: TaskStatus): boolean
 export declare function assertTransition(from: TaskStatus, to: TaskStatus, id: string): void;
 /** Resolve the effective display mode, migrating legacy widgetVisible. */
 export declare function resolveDisplayMode(snapshot: ChecklistSnapshot): DisplayMode;
+/** Resolve the effective status style. Default "pill" preserves the
+ * long-standing status-word look (now rendered on a colored background). */
+export declare function resolveStatusStyle(snapshot: ChecklistSnapshot): StatusStyle;
+/** Resolve the effective icon set. Default "nerd-font" (Nerd Font glyphs). */
+export declare function resolveIconSet(snapshot: ChecklistSnapshot): IconSet;
 export declare function toView(task: Task, byId: Map<string, Task>): TaskView;
 export declare function viewsOf(checklist: Checklist): TaskView[];
 /** Sort order: ongoing, ready planned, blocked planned, done, cancelled. */

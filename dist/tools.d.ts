@@ -1,5 +1,5 @@
 import { type TSchema } from "typebox";
-import type { Checklist, ChecklistSnapshot, DisplayMode } from "./types.js";
+import type { Checklist, ChecklistSnapshot, DisplayMode, IconSet, StatusStyle } from "./types.js";
 export declare const ChecklistCreateParams: TSchema;
 export declare const ChecklistReadParams: TSchema;
 export declare const ChecklistUpdateParams: TSchema;
@@ -15,6 +15,6 @@ export interface Mutation {
     /** True when the checklist changed and the caller should appendEntry + refresh UI. */
     changed: boolean;
 }
-export declare function executeCreate(current: Checklist | null, widgetVisible: boolean | undefined, raw: unknown, displayMode?: DisplayMode): Mutation;
-export declare function executeRead(current: Checklist | null, raw: unknown): Mutation;
-export declare function executeUpdate(current: Checklist | null, widgetVisible: boolean | undefined, raw: unknown, displayMode?: DisplayMode): Mutation;
+export declare function executeCreate(current: Checklist | null, widgetVisible: boolean | undefined, raw: unknown, displayMode?: DisplayMode, statusStyle?: StatusStyle, iconSet?: IconSet): Mutation;
+export declare function executeRead(current: Checklist | null, raw: unknown, statusStyle?: StatusStyle, iconSet?: IconSet): Mutation;
+export declare function executeUpdate(current: Checklist | null, widgetVisible: boolean | undefined, raw: unknown, displayMode?: DisplayMode, statusStyle?: StatusStyle, iconSet?: IconSet): Mutation;

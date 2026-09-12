@@ -53,15 +53,19 @@ export const UPDATE_GUIDELINES = [
     "checklist_update cannot start a task whose blockedBy is non-empty: finish every dependsOn task first. Keep at most one ongoing task (or a tight parallel set).",
     "checklist_update transitions: planned → ongoing/done/cancelled, ongoing → done/cancelled/planned, cancelled → planned. done is terminal and frozen.",
 ];
-function snapshotOf(checklist, widgetVisible, displayMode) {
+function snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet) {
     const snap = { v: 1, checklist };
     if (widgetVisible !== undefined)
         snap.widgetVisible = widgetVisible;
     if (displayMode !== undefined)
         snap.displayMode = displayMode;
+    if (statusStyle !== undefined)
+        snap.statusStyle = statusStyle;
+    if (iconSet !== undefined)
+        snap.iconSet = iconSet;
     return snap;
 }
-export function executeCreate(current, widgetVisible, raw, displayMode) {
+export function executeCreate(current, widgetVisible, raw, displayMode, statusStyle, iconSet) {
     const input = raw;
     const { checklist, assigned } = createOrAppend(current, {
         title: input.title,
@@ -73,12 +77,12 @@ export function executeCreate(current, widgetVisible, raw, displayMode) {
     const text = assigned.length === 0
         ? `checklist cleared (0/${c.total} done)`
         : `checklist: ${assigned.length} task(s) installed (${c.done}/${c.total} done)\n${lines.join("\n")}`;
-    return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode), changed: true };
+    return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet), changed: true };
 }
-export function executeRead(current, raw) {
+export function executeRead(current, raw, statusStyle, iconSet) {
     const input = (raw ?? {});
     if (!current || current.tasks.length === 0) {
-        return { text: "checklist is empty: use checklist_create first", snapshot: snapshotOf(current), changed: false };
+        return { text: "checklist is empty: use checklist_create first", snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet), changed: false };
     }
     const status = input.status;
     const includeDone = input.includeDone ?? true;
@@ -90,12 +94,12 @@ export function executeRead(current, raw) {
     const c = countsOf(current);
     const header = `checklist${current.title ? ` "${current.title}"` : ""} (${c.done}/${c.total} done, ${c.ongoing} ongoing, ${c.ready} ready, ${c.blocked} blocked)`;
     const body = views.length > 0 ? `\n${views.map(formatTaskLine).join("\n")}` : "\n(no tasks match)";
-    return { text: header + body, snapshot: snapshotOf(current), changed: false };
+    return { text: header + body, snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet), changed: false };
 }
-export function executeUpdate(current, widgetVisible, raw, displayMode) {
+export function executeUpdate(current, widgetVisible, raw, displayMode, statusStyle, iconSet) {
     const input = raw;
     const { checklist, changes } = applyUpdates(current, input.updates ?? []);
     const c = countsOf(checklist);
     const text = `checklist (${c.done}/${c.total} done):\n${changes.map((l) => `  ${l}`).join("\n")}`;
-    return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode), changed: true };
+    return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet), changed: true };
 }

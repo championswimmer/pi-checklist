@@ -21,7 +21,7 @@ import {
   renderReadCall,
   renderUpdateCall,
 } from "./render.js";
-import { buildInjectSnippet, loadFromBranch, resolveDisplayMode } from "./store.js";
+import { buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle } from "./store.js";
 import {
   CREATE_GUIDELINES,
   CREATE_SNIPPET,
@@ -36,7 +36,8 @@ import {
   executeRead,
   executeUpdate,
 } from "./tools.js";
-import type { ChecklistSnapshot, DisplayMode } from "./types.js";
+import type { ChecklistSnapshot, DisplayMode, IconSet, StatusStyle } from "./types.js";
+import type { RenderOpts } from "./render.js";
 
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -44,12 +45,22 @@ const CUSTOM_TYPE = "pi-checklist";
 
 export default function (pi: ExtensionAPI) {
   // In-memory cache; the session JSONL branch is the source of truth.
-  let state: ChecklistSnapshot = { v: 1, checklist: null, widgetVisible: true, displayMode: "statusbar" };
+  let state: ChecklistSnapshot = {
+    v: 1,
+    checklist: null,
+    widgetVisible: true,
+    displayMode: "statusbar",
+    statusStyle: "pill",
+    iconSet: "nerd-font",
+  };
   // True between turn_start and turn_end/agent_settled. In "end-of-turn"
   // mode the widget stays hidden mid-turn and appears when the turn settles.
   let inTurn = false;
 
   const getDisplayMode = (): DisplayMode => resolveDisplayMode(state);
+  const getStatusStyle = (): StatusStyle => resolveStatusStyle(state);
+  const getIconSet = (): IconSet => resolveIconSet(state);
+  const getRenderOpts = (): RenderOpts => ({ style: getStatusStyle(), iconSet: getIconSet() });
 
   function refreshUi(ctx: ExtensionContext): void {
     if (!ctx.hasUI) return;
@@ -70,11 +81,12 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const frozen = checklist;
+      const frozenOpts = getRenderOpts();
       const placement = mode === "end-of-turn" ? undefined : { placement: "belowEditor" as const };
       ctx.ui.setWidget(
         WIDGET_KEY,
         (_tui, theme) => ({
-          render: (width: number) => paintWidget(frozen, theme, width),
+          render: (width: number) => paintWidget(frozen, theme, width, frozenOpts),
           invalidate: () => {},
         }),
         placement,
@@ -104,11 +116,16 @@ export default function (pi: ExtensionAPI) {
     try {
       const branch = ctx.sessionManager.getBranch();
       const loaded = loadFromBranch(branch as Parameters<typeof loadFromBranch>[0]);
-      // Normalize: carry the resolved mode explicitly so future snapshots
-      // (and legacy widgetVisible-only entries) stay consistent.
-      state = { ...loaded, displayMode: resolveDisplayMode(loaded) };
+      // Normalize: carry the resolved prefs explicitly so future snapshots
+      // (and legacy entries without them) stay consistent.
+      state = {
+        ...loaded,
+        displayMode: resolveDisplayMode(loaded),
+        statusStyle: resolveStatusStyle(loaded),
+        iconSet: resolveIconSet(loaded),
+      };
     } catch {
-      state = { v: 1, checklist: null, displayMode: "statusbar" };
+      state = { v: 1, checklist: null, displayMode: "statusbar", statusStyle: "pill", iconSet: "nerd-font" };
     }
     refreshUi(ctx);
   }
@@ -123,7 +140,14 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: CREATE_GUIDELINES,
     parameters: ChecklistCreateParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const mutation = executeCreate(state.checklist, state.widgetVisible, params, getDisplayMode());
+      const mutation = executeCreate(
+        state.checklist,
+        state.widgetVisible,
+        params,
+        getDisplayMode(),
+        getStatusStyle(),
+        getIconSet(),
+      );
       commit(mutation.snapshot, ctx);
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
     },
@@ -139,7 +163,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: READ_GUIDELINES,
     parameters: ChecklistReadParams,
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-      const mutation = executeRead(state.checklist, params);
+      const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet());
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
     },
     renderCall: (_args, theme) => renderReadCall(theme),
@@ -154,7 +178,14 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: UPDATE_GUIDELINES,
     parameters: ChecklistUpdateParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const mutation = executeUpdate(state.checklist, state.widgetVisible, params, getDisplayMode());
+      const mutation = executeUpdate(
+        state.checklist,
+        state.widgetVisible,
+        params,
+        getDisplayMode(),
+        getStatusStyle(),
+        getIconSet(),
+      );
       commit(mutation.snapshot, ctx);
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
     },
@@ -171,8 +202,28 @@ export default function (pi: ExtensionAPI) {
       persistSnapshot(state);
       refreshUi(ctx);
     },
+    getStatusStyle,
+    setStatusStyle: (style: StatusStyle, ctx: ExtensionContext) => {
+      state = { ...state, statusStyle: style };
+      persistSnapshot(state);
+      refreshUi(ctx);
+    },
+    getIconSet,
+    setIconSet: (iconSet: IconSet, ctx: ExtensionContext) => {
+      state = { ...state, iconSet };
+      persistSnapshot(state);
+      refreshUi(ctx);
+    },
+    getRenderOpts,
     clear: (ctx: ExtensionContext) => {
-      state = { v: 1, checklist: null, widgetVisible: state.widgetVisible, displayMode: getDisplayMode() };
+      state = {
+        v: 1,
+        checklist: null,
+        widgetVisible: state.widgetVisible,
+        displayMode: getDisplayMode(),
+        statusStyle: getStatusStyle(),
+        iconSet: getIconSet(),
+      };
       persistSnapshot(state);
       refreshUi(ctx);
     },

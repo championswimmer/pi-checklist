@@ -4,7 +4,7 @@
  *
  * No pi / TUI imports — testable with plain node.
  */
-import { CHECKLIST_TOOLS, isChecklistSnapshot, isDisplayMode, } from "./types.js";
+import { CHECKLIST_TOOLS, isChecklistSnapshot, isDisplayMode, isIconSet, isStatusStyle, } from "./types.js";
 export const ID_PATTERN = /^[a-z0-9]{3}$/;
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"; // 36
 const RESERVED_IDS = new Set(["all"]);
@@ -96,6 +96,19 @@ export function resolveDisplayMode(snapshot) {
     if (snapshot.widgetVisible === false)
         return "hidden";
     return "statusbar";
+}
+/** Resolve the effective status style. Default "pill" preserves the
+ * long-standing status-word look (now rendered on a colored background). */
+export function resolveStatusStyle(snapshot) {
+    if (isStatusStyle(snapshot.statusStyle))
+        return snapshot.statusStyle;
+    return "pill";
+}
+/** Resolve the effective icon set. Default "nerd-font" (Nerd Font glyphs). */
+export function resolveIconSet(snapshot) {
+    if (isIconSet(snapshot.iconSet))
+        return snapshot.iconSet;
+    return "nerd-font";
 }
 // ---------------------------------------------------------------------------
 // Views

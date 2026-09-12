@@ -39,6 +39,36 @@ export function isDisplayMode(value: unknown): value is DisplayMode {
   return value === "statusbar" || value === "end-of-turn" || value === "hidden";
 }
 
+/** How per-task progress status is shown in the widget / overlay / transcript.
+ *
+ * - "color": rows are only color-coded, no status word.
+ * - "pill": the status word is rendered as a pill — text on a colored
+ *   background (theme.bg), e.g. ` ongoing `.
+ * - "icon": status is conveyed by a leading progress icon only, no status
+ *   word. The icon artwork comes from `IconSet`.
+ */
+export type StatusStyle = "color" | "pill" | "icon";
+
+export const STATUS_STYLES: readonly StatusStyle[] = ["color", "pill", "icon"];
+
+export function isStatusStyle(value: unknown): value is StatusStyle {
+  return value === "color" || value === "pill" || value === "icon";
+}
+
+/** Which icon artwork the "icon" status style uses.
+ *
+ * - "nerd-font": Nerd Font glyphs (Octicons block, single-cell; needs a
+ *   Nerd Font patched font in the terminal — see nerdfonts.com).
+ * - "emoji": emoji glyphs (double-width, work in any modern terminal).
+ */
+export type IconSet = "nerd-font" | "emoji";
+
+export const ICON_SETS: readonly IconSet[] = ["nerd-font", "emoji"];
+
+export function isIconSet(value: unknown): value is IconSet {
+  return value === "nerd-font" || value === "emoji";
+}
+
 /** Versioned snapshot persisted in the session JSONL. */
 export interface ChecklistSnapshot {
   v: 1;
@@ -48,6 +78,10 @@ export interface ChecklistSnapshot {
   widgetVisible?: boolean;
   /** Preferred persist for render mode. Absent = migrate from widgetVisible. */
   displayMode?: DisplayMode;
+  /** Preferred persist for status style. Absent = default ("pill"). */
+  statusStyle?: StatusStyle;
+  /** Preferred persist for icon set. Absent = default ("nerd-font"). */
+  iconSet?: IconSet;
 }
 
 /** Tool names that can carry a ChecklistSnapshot in result details. */

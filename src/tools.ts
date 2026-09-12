@@ -7,7 +7,9 @@ import type {
   ChecklistSnapshot,
   CreateInput,
   DisplayMode,
+  IconSet,
   ReadInput,
+  StatusStyle,
   TaskStatus,
   UpdateTaskInput,
 } from "./types.js";
@@ -101,10 +103,14 @@ function snapshotOf(
   checklist: Checklist | null,
   widgetVisible?: boolean,
   displayMode?: DisplayMode,
+  statusStyle?: StatusStyle,
+  iconSet?: IconSet,
 ): ChecklistSnapshot {
   const snap: ChecklistSnapshot = { v: 1, checklist };
   if (widgetVisible !== undefined) snap.widgetVisible = widgetVisible;
   if (displayMode !== undefined) snap.displayMode = displayMode;
+  if (statusStyle !== undefined) snap.statusStyle = statusStyle;
+  if (iconSet !== undefined) snap.iconSet = iconSet;
   return snap;
 }
 
@@ -113,6 +119,8 @@ export function executeCreate(
   widgetVisible: boolean | undefined,
   raw: unknown,
   displayMode?: DisplayMode,
+  statusStyle?: StatusStyle,
+  iconSet?: IconSet,
 ): Mutation {
   const input = raw as CreateInput;
   const { checklist, assigned } = createOrAppend(current, {
@@ -126,13 +134,18 @@ export function executeCreate(
     assigned.length === 0
       ? `checklist cleared (0/${c.total} done)`
       : `checklist: ${assigned.length} task(s) installed (${c.done}/${c.total} done)\n${lines.join("\n")}`;
-  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode), changed: true };
+  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet), changed: true };
 }
 
-export function executeRead(current: Checklist | null, raw: unknown): Mutation {
+export function executeRead(
+  current: Checklist | null,
+  raw: unknown,
+  statusStyle?: StatusStyle,
+  iconSet?: IconSet,
+): Mutation {
   const input = (raw ?? {}) as ReadInput;
   if (!current || current.tasks.length === 0) {
-    return { text: "checklist is empty: use checklist_create first", snapshot: snapshotOf(current), changed: false };
+    return { text: "checklist is empty: use checklist_create first", snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet), changed: false };
   }
   const status = input.status as TaskStatus | undefined;
   const includeDone = input.includeDone ?? true;
@@ -142,7 +155,7 @@ export function executeRead(current: Checklist | null, raw: unknown): Mutation {
   const c = countsOf(current);
   const header = `checklist${current.title ? ` "${current.title}"` : ""} (${c.done}/${c.total} done, ${c.ongoing} ongoing, ${c.ready} ready, ${c.blocked} blocked)`;
   const body = views.length > 0 ? `\n${views.map(formatTaskLine).join("\n")}` : "\n(no tasks match)";
-  return { text: header + body, snapshot: snapshotOf(current), changed: false };
+  return { text: header + body, snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet), changed: false };
 }
 
 export function executeUpdate(
@@ -150,10 +163,12 @@ export function executeUpdate(
   widgetVisible: boolean | undefined,
   raw: unknown,
   displayMode?: DisplayMode,
+  statusStyle?: StatusStyle,
+  iconSet?: IconSet,
 ): Mutation {
   const input = raw as { updates: UpdateTaskInput[] };
   const { checklist, changes } = applyUpdates(current, input.updates ?? []);
   const c = countsOf(checklist);
   const text = `checklist (${c.done}/${c.total} done):\n${changes.map((l) => `  ${l}`).join("\n")}`;
-  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode), changed: true };
+  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet), changed: true };
 }
