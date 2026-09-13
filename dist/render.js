@@ -330,19 +330,15 @@ export class ChecklistOverlay {
         if (this.cachedLines && this.cachedWidth === width)
             return this.cachedLines;
         const th = this.theme;
-        const lines = [""];
-        const title = th.fg("accent", ` checklist${this.title ? ` — ${this.title}` : ""} `);
-        const rule = Math.max(0, width - 14 - (this.title ? this.title.length + 3 : 0));
-        lines.push(truncateToWidth(th.fg("borderMuted", "─".repeat(3)) + title + th.fg("borderMuted", "─".repeat(rule)), width));
-        lines.push("");
+        const inner = [];
         if (this.views.length === 0) {
-            lines.push(truncateToWidth(`  ${th.fg("dim", "No tasks. Ask the agent to create a checklist!")}`, width));
+            inner.push(`  ${th.fg("dim", "No tasks. Ask the agent to create a checklist!")}`);
         }
         else {
             const counts = this.views.length;
             const done = this.views.filter((v) => v.status === "done").length;
-            lines.push(truncateToWidth(`  ${th.fg("muted", `${done}/${counts} done`)}`, width));
-            lines.push("");
+            inner.push(`  ${th.fg("muted", `${done}/${counts} done`)}`);
+            inner.push("");
             this.views.forEach((v, i) => {
                 const kind = statusKindOf(v);
                 const cursor = i === this.selected ? th.fg("accent", "› ") : "  ";
@@ -355,12 +351,15 @@ export class ChecklistOverlay {
                     : v.dependsOn.length > 0
                         ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`)
                         : "";
-                lines.push(truncateToWidth(`${cursor}${state}${glyph} ${id} ${title}${dep}`, width));
+                inner.push(`${cursor}${state}${glyph} ${id} ${title}${dep}`);
             });
         }
-        lines.push("");
-        lines.push(truncateToWidth(`  ${th.fg("dim", "j/k or ↑/↓ to move · Esc/q to close")}`, width));
-        lines.push("");
+        inner.push("");
+        inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · Esc/q to close")}`);
+        // Same rounded-border chrome as the settings dialog: frameDialog draws
+        // the ╭─╮/│/╰─╯ border with the title set into the top edge.
+        const titleText = `checklist${this.title ? ` — ${this.title}` : ""}`;
+        const lines = frameDialog(titleText, inner, width, th);
         this.cachedWidth = width;
         this.cachedLines = lines;
         return lines;
