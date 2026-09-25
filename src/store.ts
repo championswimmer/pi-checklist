@@ -29,6 +29,8 @@ const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"; // 36
 const RESERVED_IDS: ReadonlySet<string> = new Set(["all"]);
 
 export const TASK_STATUSES: readonly TaskStatus[] = ["planned", "ongoing", "done", "cancelled"];
+/** Session checklists stay deliberately small and scannable. */
+export const MAX_CHECKLIST_TASKS = 10;
 
 // ---------------------------------------------------------------------------
 // Id allocation (FNV-1a of normalized title, base36, salt on collision)
@@ -241,6 +243,11 @@ export function createOrAppend(current: Checklist | null, input: CreateInput, no
   }
 
   const base: Task[] = mode === "append" && current ? current.tasks.map((t) => ({ ...t, dependsOn: [...t.dependsOn] })) : [];
+  if (base.length + input.tasks.length > MAX_CHECKLIST_TASKS) {
+    throw new Error(
+      `checklists support at most ${MAX_CHECKLIST_TASKS} tasks; this ${mode} request would create ${base.length + input.tasks.length}`,
+    );
+  }
   const used = new Set(base.map((t) => t.id));
 
   // Pass 1: allocate ids (explicit first, then hashed).

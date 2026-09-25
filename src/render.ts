@@ -139,8 +139,8 @@ export interface WidgetLine {
   pill?: StatusPill;
 }
 
-/** Max task rows before done/cancelled collapse to a count. */
-export const WIDGET_MAX_LINES = 16;
+/** The live widget shows only the five highest-priority task rows. */
+export const WIDGET_MAX_TASKS = 5;
 
 export function widgetLines(checklist: Checklist, opts: RenderOpts = DEFAULT_RENDER_OPTS): WidgetLine[] {
   const views = sortViews(viewsOf(checklist));
@@ -159,29 +159,12 @@ export function widgetLines(checklist: Checklist, opts: RenderOpts = DEFAULT_REN
     return { kind, text: `${glyph} ${v.id}  ${v.title}${deps}`, pill: pillFor(kind) };
   };
 
-  const active = views.filter((v) => v.status === "ongoing" || v.status === "planned");
-  const finished = views.filter((v) => v.status === "done" || v.status === "cancelled");
-  const room = WIDGET_MAX_LINES - 1; // header takes one
-
-  for (const v of active.slice(0, room)) {
+  for (const v of views.slice(0, WIDGET_MAX_TASKS)) {
     lines.push(rowFor(v));
   }
-  const shownActive = Math.min(active.length, room);
-  const remaining = room - shownActive;
-  const shownFinished = finished.slice(0, Math.max(0, remaining));
-  for (const v of shownFinished) {
-    lines.push(rowFor(v));
-  }
-  const hiddenFinished = finished.length - shownFinished.length;
-  const hiddenActive = active.length - shownActive;
-  if (hiddenFinished > 0 || hiddenActive > 0) {
-    const doneHidden = finished.filter((v) => v.status === "done").length - shownFinished.filter((v) => v.status === "done").length;
-    const cxHidden = finished.filter((v) => v.status === "cancelled").length - shownFinished.filter((v) => v.status === "cancelled").length;
-    const bits: string[] = [];
-    if (hiddenActive > 0) bits.push(`+${hiddenActive} active`);
-    if (doneHidden > 0) bits.push(`✓ ${doneHidden} done`);
-    if (cxHidden > 0) bits.push(`✕ ${cxHidden} cancelled`);
-    lines.push({ kind: "summary", text: `… ${bits.join("  ")}` });
+  const hidden = views.length - WIDGET_MAX_TASKS;
+  if (hidden > 0) {
+    lines.push({ kind: "summary", text: `… +${hidden} more — /checklist show for all tasks` });
   }
   return lines;
 }

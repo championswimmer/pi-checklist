@@ -31,8 +31,8 @@ export interface WidgetLine {
     /** Present on task rows; painted as text-on-background when style is "pill". */
     pill?: StatusPill;
 }
-/** Max task rows before done/cancelled collapse to a count. */
-export declare const WIDGET_MAX_LINES = 16;
+/** The live widget shows only the five highest-priority task rows. */
+export declare const WIDGET_MAX_TASKS = 5;
 export declare function widgetLines(checklist: Checklist, opts?: RenderOpts): WidgetLine[];
 export declare function paintWidget(checklist: Checklist, theme: Theme, width: number, opts?: RenderOpts): string[];
 /** Frame pre-rendered lines as a rounded dialog box with the title set into

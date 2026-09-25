@@ -7,6 +7,8 @@
 import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Task, type TaskStatus, type IconSet, type StatusStyle, type TaskView, type UpdateTaskInput, type UsageMode } from "./types.js";
 export declare const ID_PATTERN: RegExp;
 export declare const TASK_STATUSES: readonly TaskStatus[];
+/** Session checklists stay deliberately small and scannable. */
+export declare const MAX_CHECKLIST_TASKS = 10;
 export declare function normalizeTitleKey(title: string): string;
 export declare function allocId(title: string, used: Set<string>): string;
 /** Validate a caller-supplied id; returns the lowercased id. Throws on invalid. */

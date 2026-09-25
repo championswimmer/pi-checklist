@@ -14,7 +14,7 @@ The agent can:
 
 ![/checklist dialog](https://raw.githubusercontent.com/championswimmer/pi-checklist/main/docs/checklist-dialog.png)
 
-The `/checklist` dialog (above) — the live widget and `☑ n/m` footer show the same list during a session.
+The `/checklist` dialog (above) shows every task. Session checklists hold at most 10 tasks; the live widget shows the top 5 by priority and the `☑ n/m` footer tracks overall progress.
 
 ## Check out my other Pi extensions
 
@@ -44,7 +44,7 @@ Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g.
 
 Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-The TUI shows the live list plus a `☑ n/m` footer, and `/checklist` (or `/checklist show`) pops the checklist up in a centered TUI dialog box (`/checklist clear` empties the list). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
+A session checklist holds at most **10 tasks**. The live TUI widget shows the **top 5** prioritized tasks (with an overflow hint when needed) plus a `☑ n/m` footer; `/checklist` (or `/checklist show`) opens a centered dialog with **all** tasks (`/checklist clear` empties the list). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
 
 Display placement:
 
