@@ -10,6 +10,12 @@ The agent can:
 - declare `dependsOn` so blocked work is obvious
 - render the list in the TUI after each turn so you can see what is done and what is left
 
+## Preview
+
+![/checklist dialog](https://raw.githubusercontent.com/championswimmer/pi-checklist/main/docs/checklist-dialog.png)
+
+The `/checklist` dialog (above) — the live widget and `☑ n/m` footer show the same list during a session.
+
 ## Check out my other Pi extensions
 
 - [![pi-auto-theme](https://img.shields.io/badge/🎨_pi--auto--theme-blue?style=flat-square)](https://github.com/championswimmer/pi-auto-theme) — Auto-syncs Pi theme with OS dark/light mode.
@@ -22,7 +28,7 @@ The agent can:
 
 ## Status
 
-Implemented (v0.1.0). See [`.agents/plans/001-checklist-extension.md`](.agents/plans/001-checklist-extension.md) for the design.
+Implemented (v1.0.0). See [`.agents/plans/001-checklist-extension.md`](.agents/plans/001-checklist-extension.md) for the design.
 
 ## Usage
 
@@ -117,3 +123,6 @@ Hot-reload inside pi with `/reload`.
   OIDC — no `NPM_TOKEN` needed). One-time setup: on
   npmjs.com/package/pi-checklist → Settings → Trusted Publisher, add GitHub
   Actions publisher `championswimmer` / `pi-checklist` / `release.yml`.
+- Maintainers cut releases with `node scripts/release.mjs <major|minor|patch>`
+  (see `.agents/skills/release/SKILL.md`) — it bumps, rebuilds `dist/`,
+  commits, tags `vX.Y.Z`, and pushes, and the tag push publishes to npm.
