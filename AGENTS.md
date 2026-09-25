@@ -120,3 +120,4 @@ Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in
 - GitHub repo: `https://github.com/championswimmer/pi-checklist`
 - npm name is `pi-checklist` (unscoped), v0.2.0; `publishConfig.access = "public"` kept (harmless unscoped).
 - `publishConfig.access = "public"` if scoped.
+- Trusted publishing: `.github/workflows/release.yml` publishes to npm on semver tag push (`vX.Y.Z` must match `package.json`) via GitHub OIDC — no `NPM_TOKEN`. One-time manual setup on npmjs.com → package Settings → Trusted Publisher: GitHub Actions `championswimmer` / `pi-checklist` / workflow file `release.yml`. Uses `npm install --ignore-scripts` + `npm run build` + `npm publish --access public --provenance` (provenance is automatic with trusted publishing; flag kept explicit).

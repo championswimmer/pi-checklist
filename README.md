@@ -110,4 +110,10 @@ Hot-reload inside pi with `/reload`.
   `README.md`, `LICENSE`) plus `.npmignore` as backup — no `.ts`
   sources ship, so pi loads plain JS without jiti transpiling.
 - Release flow: bump `version` in package.json → `npm run build` →
-  commit (including `dist/`) → tag `vX.Y.Z` → `npm publish`.
+  commit (including `dist/`) → `git tag vX.Y.Z && git push origin vX.Y.Z`.
+  Pushing the tag triggers `.github/workflows/release.yml`, which verifies
+  the tag matches `package.json`, builds, and publishes to npm via
+  [trusted publishing](https://docs.npmjs.com/trusted-publishers/) (GitHub
+  OIDC — no `NPM_TOKEN` needed). One-time setup: on
+  npmjs.com/package/pi-checklist → Settings → Trusted Publisher, add GitHub
+  Actions publisher `championswimmer` / `pi-checklist` / `release.yml`.
