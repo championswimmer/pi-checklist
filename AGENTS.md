@@ -115,7 +115,7 @@ Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in
 - [x] Checklist dialog border: `ChecklistOverlay.render()` in `src/render.ts` now frames content with `frameDialog()` (same rounded ╭─╮/│/╰─╯ chrome + title-in-top-border as the settings dialog); dropped the old rule-line header
 - [x] Release skill (`.agents/skills/release/SKILL.md` + `scripts/release.mjs`): `node scripts/release.mjs <major|minor|patch>` bumps, rebuilds tracked `dist/` (committed first — `npm version` refuses a dirty tree), `npm pack --dry-run`, version-commits, tags `vX.Y.Z`, pushes `main` + tag; tag push publishes via `release.yml`. Invoke as `/skill:release <type>`; bare `/release` needs a local (gitignored, uncommitted) `.pi/prompts/release.md` delegating to the skill — never ship prompts via `package.json`, it would register `/release` for every install user (see pi-context-prune plan 032)
 - [x] README Preview section with `docs/checklist-dialog.png` screenshot of the `/checklist` dialog
-- [x] Checklist capacity + widget limit (plan 005): `MAX_CHECKLIST_TASKS = 10` is enforced atomically by `createOrAppend`; the live widget shows the five highest-priority task rows and an overflow hint, while `/checklist show` renders every task
+- [x] Checklist capacity + widget limit (plan 005): `MAX_CHECKLIST_TASKS = 10` is enforced atomically by `createOrAppend`; the live widget shows the five highest-priority task rows and an overflow hint, while `/checklist show` renders every task. `tests/checklist-limits.test.mjs` is a Node built-in test suite, run through `npm test` (which rebuilds `dist/` first).
 
 ## Publishing notes
 

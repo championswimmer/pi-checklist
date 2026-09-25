@@ -107,7 +107,8 @@ Hot-reload inside pi with `/reload`.
 ## Developing / releasing
 
 - Sources live in `src/`; the published + git-installed entry is the
-  built output `dist/index.js` (`npm run build`, TypeScript).
+  built output `dist/index.js` (`npm run build`, TypeScript). Run `npm test`
+  for the permanent Node built-in test suite (it rebuilds `dist/` first).
 - `dist/` is intentionally committed: pi installs git packages with
   `npm install --omit=dev` and no build step, so the built files must
   exist in the clone. Rebuild (`npm run build`) before every commit
