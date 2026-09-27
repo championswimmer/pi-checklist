@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { MAX_CHECKLIST_TASKS, createOrAppend } from "../dist/store.js";
-import { ChecklistOverlay, WIDGET_MAX_TASKS, widgetLines } from "../dist/render.js";
+import { ChecklistOverlay, WIDGET_MAX_TASKS, colorFor, paintWidget, widgetLines } from "../dist/render.js";
 
 const theme = {
   fg: (_name, text) => text,
@@ -50,4 +50,25 @@ test("widget shows the top five tasks while the checklist overlay shows all ten"
 
   const overlay = new ChecklistOverlay(checklist, theme, { onClose() {}, requestRender() {} });
   assert.equal(overlay.render(100).filter((line) => /Task \d/.test(line)).length, MAX_CHECKLIST_TASKS);
+});
+
+test("blocked task rows use danger styling beyond the status pill", () => {
+  const checklist = createOrAppend(null, {
+    tasks: [
+      { id: "abc", title: "Finish prerequisite" },
+      { id: "bcd", title: "Blocked task", dependsOn: ["abc"] },
+    ],
+  }, 1).checklist;
+  const taggedTheme = {
+    fg: (name, text) => `<${name}>${text}</${name}>`,
+    bg: (name, text) => `<bg:${name}>${text}</bg:${name}>`,
+    bold: (text) => text,
+  };
+
+  assert.equal(colorFor("blocked"), "error");
+  assert.match(paintWidget(checklist, taggedTheme, 200).find((line) => line.includes("Blocked task")), /<error>⊘ bcd  Blocked task ← abc<\/error>/);
+
+  const overlay = new ChecklistOverlay(checklist, taggedTheme, { onClose() {}, requestRender() {} });
+  const row = overlay.render(200).find((line) => line.includes("Blocked task"));
+  assert.match(row, /<error>bcd<\/error> <error>Blocked task<\/error><error> ← abc<\/error>/);
 });

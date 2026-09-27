@@ -117,7 +117,7 @@ export function colorFor(kind: StatusKind): ThemeFgName {
     case "ready":
       return "text";
     case "blocked":
-      return "dim";
+      return "error";
     case "done":
       return "success";
     case "cancelled":
@@ -184,7 +184,7 @@ function paintLine(line: WidgetLine, theme: Theme, width: number, style: StatusS
       colored = theme.fg("text", raw);
       break;
     case "blocked":
-      colored = theme.fg("dim", raw);
+      colored = theme.fg("error", raw);
       break;
     case "done":
       colored = theme.fg("success", raw);
@@ -407,12 +407,13 @@ export class ChecklistOverlay {
       this.views.forEach((v, i) => {
         const kind = statusKindOf(v);
         const cursor = i === this.selected ? th.fg("accent", "› ") : "  ";
-        const glyph = th.fg(colorFor(kind), glyphFor(kind, this.opts));
-        const id = th.fg("accent", v.id);
-        const title = v.status === "done" || v.status === "cancelled" ? th.fg("dim", v.title) : th.fg("text", v.title);
+        const rowColor = colorFor(kind);
+        const glyph = th.fg(rowColor, glyphFor(kind, this.opts));
+        const id = th.fg(v.blocked ? rowColor : "accent", v.id);
+        const title = v.status === "done" || v.status === "cancelled" ? th.fg("dim", v.title) : th.fg(rowColor, v.title);
         const state = this.opts.style === "pill" ? `${paintPill(th, pillFor(kind))}  ` : "";
         const dep = v.blocked
-          ? th.fg("dim", ` ← ${v.blockedBy.join(", ")}`)
+          ? th.fg(rowColor, ` ← ${v.blockedBy.join(", ")}`)
           : v.dependsOn.length > 0
             ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`)
             : "";
