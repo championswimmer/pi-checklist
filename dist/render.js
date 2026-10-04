@@ -288,12 +288,26 @@ export class ChecklistOverlay {
     selected = 0;
     cachedWidth;
     cachedLines;
+    /** Task ids whose subtask rows are currently expanded. Default: all collapsed. */
+    expanded = new Set();
     constructor(checklist, theme, cb, opts = DEFAULT_RENDER_OPTS) {
         this.views = checklist ? sortViews(viewsOf(checklist)) : [];
         this.title = checklist?.title;
         this.theme = theme;
         this.cb = cb;
         this.opts = opts;
+    }
+    /** One entry per visible row: a task, or a subtask under an expanded task. */
+    flatRows() {
+        const rows = [];
+        for (const v of this.views) {
+            rows.push({ kind: "task", view: v });
+            if (this.expanded.has(v.id)) {
+                for (const s of v.subtaskViews ?? [])
+                    rows.push({ kind: "sub", view: s, parentId: v.id });
+            }
+        }
+        return rows;
     }
     handleInput(data) {
         if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c") || data === "q") {
@@ -304,8 +318,9 @@ export class ChecklistOverlay {
             this.cb.onSettings?.();
             return;
         }
+        const rows = this.flatRows();
         if (matchesKey(data, "down") || data === "j") {
-            if (this.selected < this.views.length - 1) {
+            if (this.selected < rows.length - 1) {
                 this.selected++;
                 this.invalidate();
                 this.cb.requestRender();
@@ -315,6 +330,26 @@ export class ChecklistOverlay {
         if (matchesKey(data, "up") || data === "k") {
             if (this.selected > 0) {
                 this.selected--;
+                this.invalidate();
+                this.cb.requestRender();
+            }
+            return;
+        }
+        // →/l expands the selected task's subtasks; ←/h collapses them (a
+        // subtask row collapses its own parent). No-ops on tasks without subtasks.
+        if (matchesKey(data, "right") || data === "l") {
+            const row = rows[this.selected];
+            if (row?.kind === "task" && row.view.subtaskViews?.length) {
+                this.expanded.add(row.view.id);
+                this.invalidate();
+                this.cb.requestRender();
+            }
+            return;
+        }
+        if (matchesKey(data, "left") || data === "h") {
+            const row = rows[this.selected];
+            const parentId = row?.kind === "sub" ? row.parentId : row?.view.id;
+            if (parentId && this.expanded.delete(parentId)) {
                 this.invalidate();
                 this.cb.requestRender();
             }
@@ -334,7 +369,12 @@ export class ChecklistOverlay {
             const done = this.views.filter((v) => v.status === "done").length;
             inner.push(`  ${th.fg("muted", `${done}/${counts} done`)}`);
             inner.push("");
-            this.views.forEach((v, i) => {
+            const rows = this.flatRows();
+            // Keep the selection on an existing row after a collapse shrank the list.
+            this.selected = Math.min(this.selected, Math.max(0, rows.length - 1));
+            rows.forEach((row, i) => {
+                const v = row.view;
+                const isTask = row.kind === "task";
                 const kind = statusKindOf(v);
                 const cursor = i === this.selected ? th.fg("accent", "› ") : "  ";
                 const rowColor = colorFor(kind);
@@ -347,25 +387,21 @@ export class ChecklistOverlay {
                     : v.dependsOn.length > 0
                         ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`)
                         : "";
-                inner.push(`${cursor}${state}${glyph} ${id} ${title}${dep}`);
-                for (const s of v.subtaskViews ?? []) {
-                    const skind = statusKindOf(s);
-                    const sColor = colorFor(skind);
-                    const sglyph = th.fg(sColor, glyphFor(skind, this.opts));
-                    const sid = th.fg(s.blocked ? sColor : "accent", s.id);
-                    const stitle = s.status === "done" || s.status === "cancelled" ? th.fg("dim", s.title) : th.fg(sColor, s.title);
-                    const sstate = this.opts.style === "pill" ? `${paintPill(th, pillFor(skind))}  ` : "";
-                    const sdep = s.blocked
-                        ? th.fg(sColor, ` ← ${s.blockedBy.join(", ")}`)
-                        : s.dependsOn.length > 0
-                            ? th.fg("dim", ` ← ${s.dependsOn.join(", ")}`)
-                            : "";
-                    inner.push(`    ${sstate}${sglyph} ${sid} ${stitle}${sdep}`);
+                if (isTask) {
+                    // Expand/collapse marker slot: ▸ collapsed, ▾ expanded, blank when
+                    // the task has no subtasks (keeps rows aligned).
+                    const subs = v.subtaskViews ?? [];
+                    const marker = subs.length === 0 ? "  " : this.expanded.has(v.id) ? "▾ " : "▸ ";
+                    inner.push(`${cursor}${marker}${state}${glyph} ${id} ${title}${dep}`);
+                }
+                else {
+                    const s = v;
+                    inner.push(`${cursor}  ${state}${glyph} ${id} ${title}${dep}`);
                 }
             });
         }
         inner.push("");
-        inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · s for settings · Esc/q to close")}`);
+        inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · →/l expand · ←/h collapse · s for settings · Esc/q to close")}`);
         // Same rounded-border chrome as the settings dialog: frameDialog draws
         // the ╭─╮/│/╰─╯ border with the title set into the top edge.
         const titleText = `checklist${this.title ? ` — ${this.title}` : ""}`;
