@@ -10,6 +10,27 @@ export interface Task {
     status: TaskStatus;
     /** 3-char task ids that must be `done` before this may become `ongoing`. */
     dependsOn: string[];
+    /** Preview-gated subtasks (see MAX_SUBTASKS_PER_TASK). Absent = none. */
+    subtasks?: Subtask[];
+    createdAt: number;
+    updatedAt: number;
+}
+/** A subtask nested inside one parent task (preview feature).
+ *
+ * Same lifecycle as a task, but scoped: `dependsOn` may reference only
+ * sibling subtasks of the same parent, and the subtask inherits the
+ * parent's blocked state (see the S1–S6 primitives in store.ts). Ids share
+ * the checklist-wide 3-char space so every tool reference is unambiguous. */
+export interface Subtask {
+    /** Exactly 3 chars, [a-z0-9], unique across tasks AND subtasks, frozen. */
+    id: string;
+    /** Short required title. */
+    title: string;
+    /** Optional extra context for the agent. */
+    notes?: string;
+    status: TaskStatus;
+    /** 3-char sibling subtask ids (same parent) that must be `done` first. */
+    dependsOn: string[];
     createdAt: number;
     updatedAt: number;
 }
@@ -82,10 +103,25 @@ export interface ChecklistSnapshot {
     /** Usage-guidance strength for the injected system prompt.
      * Absent = default ("moderate"). Applied only on extension reload. */
     usage?: UsageMode;
+    /** Preview-gated subtasks. Absent = default (`false`). Persisted in the
+     * session snapshot and mirrored to the global prefs file like the other
+     * settings (precedence: global file > snapshot > default). */
+    subtasksEnabled?: boolean;
 }
 /** Tool names that can carry a ChecklistSnapshot in result details. */
 export declare const CHECKLIST_TOOLS: ReadonlySet<string>;
 export declare function isChecklistSnapshot(value: unknown): value is ChecklistSnapshot;
+/** Computed per-subtask view (never stored). `blockedBy` is the effective
+ * block: sibling deps not done, plus the parent's own `blockedBy` when the
+ * parent is blocked (inherited block, primitive S3). */
+export interface SubtaskView extends Subtask {
+    /** status === "planned", sibling deps done, and parent not blocked */
+    ready: boolean;
+    /** sibling dep ids not done (+ inherited parent blocks) */
+    blockedBy: string[];
+    /** blockedBy.length > 0 */
+    blocked: boolean;
+}
 /** Computed per-task view (never stored). */
 export interface TaskView extends Task {
     /** status === "planned" and every dep is done */
@@ -94,8 +130,19 @@ export interface TaskView extends Task {
     blockedBy: string[];
     /** blockedBy.length > 0 */
     blocked: boolean;
+    /** Subtask views (empty when the task has no subtasks). */
+    subtaskViews: SubtaskView[];
 }
 export interface CreateTaskInput {
+    id?: string;
+    title: string;
+    notes?: string;
+    dependsOn?: string | string[];
+    subtasks?: CreateSubtaskInput[];
+}
+/** Subtask payload at create time. Subtasks are born `planned` (`status` is
+ * not accepted — start them via checklist_update). */
+export interface CreateSubtaskInput {
     id?: string;
     title: string;
     notes?: string;
@@ -111,6 +158,17 @@ export interface UpdateTaskInput {
     status?: TaskStatus;
     title?: string;
     notes?: string;
+    dependsOn?: string | string[];
+    subtasks?: UpdateSubtaskInput[];
+}
+/** Subtask patch inside a parent's update entry. An entry WITH `id` patches
+ * the existing subtask; WITHOUT `id` it adds a new one (`title` required,
+ * born `planned` — `status` is rejected on adds). */
+export interface UpdateSubtaskInput {
+    id?: string;
+    title?: string;
+    notes?: string;
+    status?: TaskStatus;
     dependsOn?: string | string[];
 }
 export interface ReadInput {

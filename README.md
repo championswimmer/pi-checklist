@@ -70,9 +70,16 @@ Usage guidance (how strongly the agent is steered toward the checklist):
 
 Usage guidance is baked into the system prompt, so it is captured once when the extension loads — after changing it, run `/reload` or start a new pi session for it to take effect. The display settings above apply immediately.
 
+Subtasks (preview):
+
+- Enable with `/checklist settings subtasks` (off with `/checklist settings no-subtasks`); the settings screen has a matching `Subtasks (preview)` toggle.
+- Each task holds at most **3 subtasks** (fixed cap, like the 10-task limit). Subtasks are born `planned` and run the same status machine as tasks.
+- A subtask's `dependsOn` may name only **siblings inside the same parent task**.
+- State primitives: a parent cannot finish (`→ done`) while any subtask is still open (`planned`/`ongoing` — `cancelled` counts as resolved); starting a subtask pulls a `planned` parent to `ongoing` automatically; a subtask cannot start while its parent is blocked (it inherits the parent's block); cancelling a parent cascade-cancels its open subtasks; finish parent + subtasks together in **one** `checklist_update` entry.
+
 `/checklist hide` is shorthand for hidden mode.
 
-State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet` / `usage`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
+State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet` / `usage` / `subtasksEnabled`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
 
 ## Install
 

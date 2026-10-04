@@ -1,7 +1,7 @@
 import { registerChecklistCommand } from "./commands.js";
 import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
-import { MAX_CHECKLIST_TASKS, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -20,6 +20,7 @@ export default function (pi) {
         statusStyle: globalSeed.statusStyle ?? "pill",
         iconSet: globalSeed.iconSet ?? "nerd-font",
         usage: globalSeed.usage ?? "moderate",
+        subtasksEnabled: globalSeed.subtasksEnabled ?? false,
     };
     // The usage-guidance hint is baked into the system prompt, so it is
     // captured ONCE here at extension load. setUsage below still persists the
@@ -33,6 +34,7 @@ export default function (pi) {
     const getStatusStyle = () => resolveStatusStyle(state);
     const getIconSet = () => resolveIconSet(state);
     const getUsage = () => resolveUsage(state);
+    const getSubtasksEnabled = () => resolveSubtasksEnabled(state);
     const getRenderOpts = () => ({ style: getStatusStyle(), iconSet: getIconSet() });
     function refreshUi(ctx) {
         if (!ctx.hasUI)
@@ -87,6 +89,7 @@ export default function (pi) {
             statusStyle: getStatusStyle(),
             iconSet: getIconSet(),
             usage: getUsage(),
+            subtasksEnabled: getSubtasksEnabled(),
         });
     }
     function reconstruct(ctx) {
@@ -105,6 +108,7 @@ export default function (pi) {
                 statusStyle: global.statusStyle ?? resolveStatusStyle(loaded),
                 iconSet: global.iconSet ?? resolveIconSet(loaded),
                 usage: global.usage ?? resolveUsage(loaded),
+                subtasksEnabled: global.subtasksEnabled ?? resolveSubtasksEnabled(loaded),
             };
         }
         catch {
@@ -116,6 +120,7 @@ export default function (pi) {
                 statusStyle: global.statusStyle ?? "pill",
                 iconSet: global.iconSet ?? "nerd-font",
                 usage: global.usage ?? "moderate",
+                subtasksEnabled: global.subtasksEnabled ?? false,
             };
         }
         refreshUi(ctx);
@@ -129,7 +134,7 @@ export default function (pi) {
         promptGuidelines: CREATE_GUIDELINES,
         parameters: ChecklistCreateParams,
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-            const mutation = executeCreate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet());
+            const mutation = executeCreate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet(), getSubtasksEnabled());
             commit(mutation.snapshot, ctx);
             return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
         },
@@ -144,7 +149,7 @@ export default function (pi) {
         promptGuidelines: READ_GUIDELINES,
         parameters: ChecklistReadParams,
         async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-            const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet());
+            const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet(), getSubtasksEnabled());
             return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
         },
         renderCall: (_args, theme) => renderReadCall(theme),
@@ -158,7 +163,7 @@ export default function (pi) {
         promptGuidelines: UPDATE_GUIDELINES,
         parameters: ChecklistUpdateParams,
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-            const mutation = executeUpdate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet());
+            const mutation = executeUpdate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet(), getSubtasksEnabled());
             commit(mutation.snapshot, ctx);
             return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
         },
@@ -197,6 +202,13 @@ export default function (pi) {
             savePrefs();
             refreshUi(ctx);
         },
+        getSubtasksEnabled,
+        setSubtasksEnabled: (enabled, ctx) => {
+            state = { ...state, subtasksEnabled: enabled };
+            persistSnapshot(state);
+            savePrefs();
+            refreshUi(ctx);
+        },
         getRenderOpts,
         clear: (ctx) => {
             state = {
@@ -207,6 +219,7 @@ export default function (pi) {
                 statusStyle: getStatusStyle(),
                 iconSet: getIconSet(),
                 usage: getUsage(),
+                subtasksEnabled: getSubtasksEnabled(),
             };
             persistSnapshot(state);
             refreshUi(ctx);

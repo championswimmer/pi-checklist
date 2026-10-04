@@ -34,7 +34,7 @@ export type ChecklistAction =
   | { name: "show" }
   | { name: "hide" }
   | { name: "clear" }
-  | { name: "settings"; displayMode?: DisplayMode; statusStyle?: StatusStyle; iconSet?: IconSet; usage?: UsageMode }
+  | { name: "settings"; displayMode?: DisplayMode; statusStyle?: StatusStyle; iconSet?: IconSet; usage?: UsageMode; subtasksEnabled?: boolean }
   | { name: "help" };
 
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
@@ -73,6 +73,14 @@ export function normalizeUsageMode(raw: string): UsageMode | undefined {
   return undefined;
 }
 
+/** Normalize a user-typed subtasks word to a boolean (preview toggle). */
+export function normalizeSubtasksSetting(raw: string): boolean | undefined {
+  const word = raw.trim().toLowerCase().replace(/_/g, "-");
+  if (word === "subtasks" || word === "subtask" || word === "sub-tasks" || word === "on") return true;
+  if (word === "no-subtasks" || word === "nosubtasks" || word === "no-subtask" || word === "off") return false;
+  return undefined;
+}
+
 export function parseChecklistArgs(raw: string): ChecklistAction {
   const parts = raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const head = parts[0] ?? "";
@@ -87,6 +95,7 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
     let statusStyle: StatusStyle | undefined;
     let iconSet: IconSet | undefined;
     let usage: UsageMode | undefined;
+    let subtasksEnabled: boolean | undefined;
     for (const token of tokens) {
       const m = normalizeDisplayMode(token);
       if (m && displayMode === undefined) {
@@ -108,23 +117,28 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
         usage = u;
         continue;
       }
+      const st = normalizeSubtasksSetting(token);
+      if (st !== undefined && subtasksEnabled === undefined) {
+        subtasksEnabled = st;
+        continue;
+      }
       return { name: "help" };
     }
-    if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined) {
+    if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined && subtasksEnabled === undefined) {
       return { name: "help" };
     }
-    return { name: "settings", displayMode, statusStyle, iconSet, usage };
+    return { name: "settings", displayMode, statusStyle, iconSet, usage, subtasksEnabled };
   }
   return { name: "help" };
 }
 
 export const CHECKLIST_USAGE =
-  "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive]]";
+  "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
 
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(
   ctx: ExtensionCommandContext,
-  deps: Pick<ChecklistCommandDeps, "getChecklist" | "getRenderOpts" | "getDisplayMode" | "setDisplayMode" | "getStatusStyle" | "setStatusStyle" | "getIconSet" | "setIconSet" | "getUsage" | "setUsage" | "clear">,
+  deps: Pick<ChecklistCommandDeps, "getChecklist" | "getRenderOpts" | "getDisplayMode" | "setDisplayMode" | "getStatusStyle" | "setStatusStyle" | "getIconSet" | "setIconSet" | "getUsage" | "setUsage" | "getSubtasksEnabled" | "setSubtasksEnabled" | "clear">,
 ): Promise<void> {
   if (ctx.mode !== "tui" || !ctx.hasUI) {
     // No popup surface in print mode — fall back to a text summary.
@@ -176,6 +190,8 @@ export interface ChecklistCommandDeps {
   setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void;
   getUsage: () => UsageMode;
   setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void;
+  getSubtasksEnabled: () => boolean;
+  setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
   getRenderOpts: () => RenderOpts;
   clear: (ctx: ExtensionCommandContext) => void;
   getChecklist: () => import("./types.js").Checklist | null;
@@ -188,6 +204,7 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
     let style = deps.getStatusStyle();
     let icons = deps.getIconSet();
     let usage = deps.getUsage();
+    let subtasks = deps.getSubtasksEnabled() ? "on" : "off";
 
     const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
     const previewBody = new Text("", 1, 0);
@@ -235,6 +252,14 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
         description:
           "moderate: long-running / multi-step work only · aggressive: almost every task · changes the system prompt — takes effect after reload (/reload or a new session)",
       },
+      {
+        id: "subtasks",
+        label: "Subtasks (preview)",
+        currentValue: subtasks,
+        values: ["off", "on"],
+        description:
+          "preview: nested subtasks inside tasks (at most 3 per task, sibling-only dependsOn)",
+      },
     ];
 
     // Dialog chrome is drawn by frameDialog (rounded box + title in the top
@@ -268,6 +293,10 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
             `checklist usage guidance: ${USAGE_LABELS[newValue]} (takes effect after /reload or a new session)`,
             "info",
           );
+        } else if (id === "subtasks" && (newValue === "on" || newValue === "off")) {
+          subtasks = newValue;
+          deps.setSubtasksEnabled(newValue === "on", ctx);
+          ctx.ui.notify(`checklist subtasks (preview): ${newValue}`, "info");
         }
         repaintPreview(theme);
         repaintHint(theme);
@@ -314,7 +343,7 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
       if (lower.startsWith("settings ") || lower === "settings") {
         const rest = lower.startsWith("settings ") ? lower.slice("settings ".length) : "";
         const last = rest.split(/\s+/).pop() ?? "";
-        const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES].filter((m) => m.startsWith(last));
+        const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES, "subtasks", "no-subtasks"].filter((m) => m.startsWith(last));
         const base = rest.includes(" ") ? rest.slice(0, rest.lastIndexOf(" ") + 1) : "";
         const values = candidates.map((m) => `settings ${base}${m}`);
         return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
@@ -364,6 +393,10 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
         if (action.usage) {
           deps.setUsage(action.usage, ctx);
           applied.push(USAGE_LABELS[action.usage]);
+        }
+        if (action.subtasksEnabled !== undefined) {
+          deps.setSubtasksEnabled(action.subtasksEnabled, ctx);
+          applied.push(`Subtasks (preview): ${action.subtasksEnabled ? "on" : "off"}`);
         }
         if (applied.length > 0) {
           if (action.usage) {

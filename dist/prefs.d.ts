@@ -4,6 +4,8 @@ export interface GlobalPrefs {
     statusStyle?: StatusStyle;
     iconSet?: IconSet;
     usage?: UsageMode;
+    /** Subtasks preview flag. Absent = off. */
+    subtasksEnabled?: boolean;
 }
 /** Resolve the pi agent dir: `PI_CODING_AGENT_DIR` or `~/.pi/agent`. */
 export declare function resolveAgentDir(): string;

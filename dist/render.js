@@ -116,8 +116,19 @@ export function widgetLines(checklist, opts = DEFAULT_RENDER_OPTS) {
         const deps = v.blocked ? ` ← ${v.blockedBy.join(", ")}` : "";
         return { kind, text: `${glyph} ${v.id}  ${v.title}${deps}`, pill: pillFor(kind) };
     };
+    const subRowFor = (s) => {
+        const kind = statusKindOf(s);
+        const glyph = glyphFor(kind, opts);
+        const deps = s.blocked ? ` ← ${s.blockedBy.join(", ")}` : "";
+        return { kind, text: `  ↳ ${glyph} ${s.id}  ${s.title}${deps}`, pill: pillFor(kind) };
+    };
     for (const v of views.slice(0, WIDGET_MAX_TASKS)) {
         lines.push(rowFor(v));
+        // Subtasks ride along with their parent (the 5-row cap counts top-level
+        // tasks only; each parent holds at most 3 subtasks).
+        for (const s of v.subtaskViews ?? []) {
+            lines.push(subRowFor(s));
+        }
     }
     const hidden = views.length - WIDGET_MAX_TASKS;
     if (hidden > 0) {
@@ -262,11 +273,17 @@ export function renderChecklistResult(result, expanded, theme) {
     if (!expanded)
         return new Text(summary, 0, 0);
     const views = sortViews(viewsOf(checklist)).slice(0, 10);
-    const rows = views.map((v) => {
+    const rows = [];
+    for (const v of views) {
         const kind = statusKindOf(v);
         const row = theme.fg(colorFor(kind), `${glyphFor(kind, opts)} ${v.id} ${v.title}${v.blocked ? ` ← ${v.blockedBy.join(", ")}` : ""}`);
-        return opts.style === "pill" ? `${paintPill(theme, pillFor(kind))}  ${row}` : row;
-    });
+        rows.push(opts.style === "pill" ? `${paintPill(theme, pillFor(kind))}  ${row}` : row);
+        for (const s of v.subtaskViews ?? []) {
+            const skind = statusKindOf(s);
+            const srow = theme.fg(colorFor(skind), `↳ ${glyphFor(skind, opts)} ${s.id} ${s.title}${s.blocked ? ` ← ${s.blockedBy.join(", ")}` : ""}`);
+            rows.push(opts.style === "pill" ? `${paintPill(theme, pillFor(skind))}  ${srow}` : srow);
+        }
+    }
     return new Text(`${summary}\n${rows.join("\n")}`, 0, 0);
 }
 export class ChecklistOverlay {
@@ -338,6 +355,20 @@ export class ChecklistOverlay {
                         ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`)
                         : "";
                 inner.push(`${cursor}${state}${glyph} ${id} ${title}${dep}`);
+                for (const s of v.subtaskViews ?? []) {
+                    const skind = statusKindOf(s);
+                    const sColor = colorFor(skind);
+                    const sglyph = th.fg(sColor, glyphFor(skind, this.opts));
+                    const sid = th.fg(s.blocked ? sColor : "accent", s.id);
+                    const stitle = s.status === "done" || s.status === "cancelled" ? th.fg("dim", s.title) : th.fg(sColor, s.title);
+                    const sstate = this.opts.style === "pill" ? `${paintPill(th, pillFor(skind))}  ` : "";
+                    const sdep = s.blocked
+                        ? th.fg(sColor, ` ← ${s.blockedBy.join(", ")}`)
+                        : s.dependsOn.length > 0
+                            ? th.fg("dim", ` ← ${s.dependsOn.join(", ")}`)
+                            : "";
+                    inner.push(`    ${sstate}${sglyph} ${sid} ${stitle}${sdep}`);
+                }
             });
         }
         inner.push("");

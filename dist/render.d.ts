@@ -1,7 +1,7 @@
 /** TUI surfaces: widget lines, footer text, tool renderers, /checklist overlay. */
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import type { Checklist, DisplayMode, IconSet, StatusStyle, TaskView, UsageMode } from "./types.js";
+import type { Checklist, DisplayMode, IconSet, StatusStyle, TaskStatus, UsageMode } from "./types.js";
 type ThemeBgName = Parameters<Theme["bg"]>[0];
 type ThemeFgName = Parameters<Theme["fg"]>[0];
 /** Display-ready status incl. the planned → ready/blocked split. */
@@ -11,7 +11,10 @@ export interface RenderOpts {
     iconSet: IconSet;
 }
 export declare const DEFAULT_RENDER_OPTS: RenderOpts;
-export declare function statusKindOf(v: TaskView): StatusKind;
+export declare function statusKindOf(v: {
+    status: TaskStatus;
+    blocked: boolean;
+}): StatusKind;
 export declare function glyphFor(kind: StatusKind, opts: RenderOpts): string;
 export interface StatusPill {
     label: string;
