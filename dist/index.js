@@ -1,7 +1,7 @@
 import { registerChecklistCommand } from "./commands.js";
 import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
-import { buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveUsage } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -124,7 +124,7 @@ export default function (pi) {
     pi.registerTool({
         name: "checklist_create",
         label: "Checklist Create",
-        description: "Create or extend the session task checklist (replace by default, or append). Returns 3-char task ids. Send an empty tasks array to clear the checklist for the next set of tasks.",
+        description: `Create or extend the session task checklist (replace by default, or append). Holds at most ${MAX_CHECKLIST_TASKS} tasks total at a time. Returns 3-char task ids. Send an empty tasks array to clear the checklist for the next set of tasks.`,
         promptSnippet: CREATE_SNIPPET,
         promptGuidelines: CREATE_GUIDELINES,
         parameters: ChecklistCreateParams,

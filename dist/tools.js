@@ -1,7 +1,7 @@
 /** Tool schemas, guidelines, and execute logic for pi-checklist. */
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { applyUpdates, countsOf, createOrAppend, formatTaskLine, sortViews, viewsOf } from "./store.js";
+import { MAX_CHECKLIST_TASKS, applyUpdates, countsOf, createOrAppend, formatTaskLine, sortViews, viewsOf } from "./store.js";
 // ---------------------------------------------------------------------------
 // Schemas (dependsOn coerced at the boundary: string | string[])
 // ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ export const ChecklistCreateParams = Type.Object({
         title: Type.String({ description: "Short task title (required)" }),
         notes: Type.Optional(Type.String({ description: "Optional extra context" })),
         dependsOn: DependsOn,
-    }), { description: "Tasks to install (replace) or add (append). An empty array with mode replace clears the checklist, ready for the next set of tasks." }),
+    }), { description: `Tasks to install (replace) or add (append). A checklist holds at most ${MAX_CHECKLIST_TASKS} tasks total at a time. An empty array with mode replace clears the checklist, ready for the next set of tasks.` }),
 });
 export const ChecklistReadParams = Type.Object({
     status: Type.Optional(StringEnum(["planned", "ongoing", "done", "cancelled"], {
@@ -42,6 +42,7 @@ export const CREATE_SNIPPET = "Create or replace the session task checklist.";
 export const CREATE_GUIDELINES = [
     "Use checklist_create at the start of multi-step work; use mode replace when the plan changes substantially and mode append when new work appears mid-session.",
     "checklist_create task ids are exactly 3 lowercase alphanumeric chars: omit id unless you need a same-batch DAG, then pass explicit 3-char ids. Always copy the returned ids; never invent them.",
+    `A checklist holds at most ${MAX_CHECKLIST_TASKS} tasks total at a time; keep it small, split overflow into a follow-up checklist.`,
 ];
 export const READ_SNIPPET = "Read the session task checklist.";
 export const READ_GUIDELINES = [
