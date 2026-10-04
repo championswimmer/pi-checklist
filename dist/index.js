@@ -1,7 +1,7 @@
 import { registerChecklistCommand } from "./commands.js";
 import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
-import { MAX_CHECKLIST_TASKS, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -246,9 +246,14 @@ export default function (pi) {
         // The hint uses usageGuidanceAtLoad (captured when the extension
         // loaded), never getUsage(): changing /checklist settings mid-session
         // must not silently rewrite the system prompt — it applies on reload.
-        const hint = usageGuidanceAtLoad === "aggressive"
+        const hint = (usageGuidanceAtLoad === "aggressive"
             ? "Checklist expected: use checklist_create/read/update for almost every task, even small ones, and mark progress as you go. Only skip it for trivial single-step questions."
-            : "Checklist available: for long-running or multi-step work (refactors, audits, multi-part features), track it with checklist_create/read/update and mark progress as you go. Skip it for quick one-shot questions.";
+            : "Checklist available: for long-running or multi-step work (refactors, audits, multi-part features), track it with checklist_create/read/update and mark progress as you go. Skip it for quick one-shot questions.") +
+            // Live subtasks state (re-evaluated every turn, unlike the usage hint
+            // above): explicitly tell the model whether subtasks exist at all.
+            (getSubtasksEnabled()
+                ? ` Tasks can have up to ${MAX_SUBTASKS_PER_TASK} subtasks each: use them to break larger tasks down.`
+                : " Tasks have no subtasks.");
         const checklist = state.checklist;
         const open = !!checklist &&
             checklist.tasks.length > 0 &&

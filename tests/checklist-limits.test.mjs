@@ -66,7 +66,7 @@ test("blocked task rows use danger styling beyond the status pill", () => {
   };
 
   assert.equal(colorFor("blocked"), "error");
-  assert.match(paintWidget(checklist, taggedTheme, 200).find((line) => line.includes("Blocked task")), /<error>⊘ bcd  Blocked task ← abc<\/error>/);
+  assert.match(paintWidget(checklist, taggedTheme, 200).find((line) => line.includes("Blocked task")), /<error>  ⊘ bcd  Blocked task ← abc<\/error>/);
 
   const overlay = new ChecklistOverlay(checklist, taggedTheme, { onClose() {}, requestRender() {} });
   const row = overlay.render(200).find((line) => line.includes("Blocked task"));

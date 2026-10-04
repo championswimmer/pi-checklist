@@ -87,7 +87,11 @@ export declare class ChecklistOverlay {
     private selected;
     private cachedWidth?;
     private cachedLines?;
+    /** Task ids whose subtask rows are currently expanded. Default: all collapsed. */
+    private expanded;
     constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks, opts?: RenderOpts);
+    /** One entry per visible row: a task, or a subtask under an expanded task. */
+    private flatRows;
     handleInput(data: string): void;
     render(width: number): string[];
     invalidate(): void;

@@ -75,6 +75,7 @@ Subtasks (preview):
 - Enable with `/checklist settings subtasks` (off with `/checklist settings no-subtasks`); the settings screen has a matching `Subtasks (preview)` toggle.
 - Each task holds at most **3 subtasks** (fixed cap, like the 10-task limit). Subtasks are born `planned` and run the same status machine as tasks.
 - A subtask's `dependsOn` may name only **siblings inside the same parent task**.
+- In the `/checklist` dialog, tasks open **collapsed**; press **→** (or `l`) on a task with subtasks to expand it and **←** (or `h`) to collapse (works from a subtask row too).
 - State primitives: a parent cannot finish (`→ done`) while any subtask is still open (`planned`/`ongoing` — `cancelled` counts as resolved); starting a subtask pulls a `planned` parent to `ongoing` automatically; a subtask cannot start while its parent is blocked (it inherits the parent's block); cancelling a parent cascade-cancels its open subtasks; finish parent + subtasks together in **one** `checklist_update` entry.
 
 `/checklist hide` is shorthand for hidden mode.

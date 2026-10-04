@@ -7,7 +7,17 @@ import {
   createOrAppend,
   viewsOf,
 } from "../dist/store.js";
-import { widgetLines } from "../dist/render.js";
+import { ChecklistOverlay, widgetLines } from "../dist/render.js";
+
+const THEME = {
+  fg: (name, text) => `<${name}>${text}</${name}>`,
+  bg: (name, text) => `<bg:${name}>${text}</bg:${name}>`,
+  bold: (text) => text,
+};
+
+const RIGHT = "\x1b[C";
+const LEFT = "\x1b[D";
+const DOWN = "\x1b[B";
 
 const ON = { subtasksEnabled: true };
 const OFF = { subtasksEnabled: false };
@@ -339,13 +349,56 @@ test("S5: parent cannot step back to planned while a subtask is ongoing", () => 
 // Rendering
 // ---------------------------------------------------------------------------
 
-test("widget + views expose subtask rows under their parent", () => {
-  const checklist = parentWithSubs([{ title: "S1" }, { title: "S2" }]);
-  const [s1] = subIds(checklist);
-  const next = update(checklist, [{ id: "aaa", subtasks: [{ id: s1, status: "ongoing" }] }]);
-  const lines = widgetLines(next).map((l) => l.text);
-  assert.ok(lines.some((t) => t.startsWith("● aaa")), "parent row present");
-  const subRows = lines.filter((t) => t.includes("↳"));
-  assert.equal(subRows.length, 2);
-  assert.ok(subRows[0].includes(s1));
+test("widget shows a ↳ marker for tasks with subtasks (no subtask rows), blank slot otherwise", () => {
+  const withSubs = parentWithSubs([{ title: "S1" }, { title: "S2" }]);
+  const lines = widgetLines(withSubs).map((l) => l.text);
+  const parentRow = lines.find((t) => t.includes("aaa"));
+  assert.ok(parentRow?.startsWith("↳ ○ aaa"), "parent row has ↳ marker");
+  // No subtask rows in the widget at all.
+  assert.equal(lines.filter((t) => /  ↳ [a-z]/.test(t)).length, 0);
+
+  // A task without subtasks keeps the same alignment via a blank marker slot.
+  const plain = createOrAppend(null, { tasks: [{ id: "zzz", title: "Plain" }] }, 1).checklist;
+  const plainRow = widgetLines(plain).find((l) => l.text.includes("zzz"))?.text;
+  assert.ok(plainRow?.startsWith("  ○ zzz"), "plain row has blank marker slot");
+  assert.equal(plainRow?.indexOf("Plain") - plainRow?.indexOf("zzz"), parentRow?.indexOf("Parent") - parentRow?.indexOf("aaa"), "titles stay aligned");
+});
+
+// ---------------------------------------------------------------------------
+// Overlay expand/collapse (←/→)
+// ---------------------------------------------------------------------------
+
+test("overlay opens collapsed; → expands subtasks, ← collapses them", () => {
+  const [s1, s2] = subIds(parentWithSubs([{ title: "S1" }, { title: "S2" }]));
+  const checklist = createOrAppend(
+    null,
+    { tasks: [{ id: "aaa", title: "Parent", subtasks: [{ title: "S1" }, { title: "S2" }] }, { id: "bbb", title: "Plain" }] },
+    NOW,
+    ON,
+  ).checklist;
+  const overlay = new ChecklistOverlay(checklist, THEME, { onClose() {}, requestRender() {} });
+
+  const taskRows = () => overlay.render(200).filter((l) => /aaa|bbb/.test(l));
+  // Default: all collapsed — ▸ marker, no subtask rows; plain task keeps a
+  // blank marker slot (title/pill start at the same column as the parent's).
+  assert.ok(taskRows()[0].includes("▸"), "collapsed marker on task with subtasks");
+  assert.ok(taskRows()[1].startsWith("<border>│</border>    "), "plain task keeps an aligned blank slot");
+  assert.equal(overlay.render(200).filter((l) => l.includes(s1) || l.includes(s2)).length, 0, "subtasks hidden");
+
+  // → expands; subtask rows appear under the parent.
+  overlay.handleInput(RIGHT);
+  const expanded = taskRows();
+  assert.ok(expanded[0].includes("▾"), "expanded marker");
+  assert.equal(overlay.render(200).filter((l) => l.includes(s1) || l.includes(s2)).length, 2, "subtask rows shown");
+
+  // → on a task without subtasks is a no-op.
+  overlay.handleInput(DOWN);
+  overlay.handleInput(DOWN);
+  overlay.handleInput(RIGHT);
+  assert.equal(overlay.render(200).filter((l) => l.includes(s1) || l.includes(s2)).length, 2, "no-op on plain task");
+
+  // ← on a subtask row collapses the parent and hides the rows again.
+  overlay.handleInput(LEFT);
+  assert.equal(overlay.render(200).filter((l) => l.includes(s1) || l.includes(s2)).length, 0, "subtasks hidden after collapse");
+  assert.ok(taskRows()[0].includes("▸"), "collapsed marker restored");
 });
