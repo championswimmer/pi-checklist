@@ -350,6 +350,8 @@ export function renderChecklistResult(
 export interface OverlayCallbacks {
   onClose: () => void;
   requestRender: () => void;
+  /** Jump to the settings screen (the `s` shortcut). Optional so tests can omit it. */
+  onSettings?: () => void;
 }
 
 export class ChecklistOverlay {
@@ -373,6 +375,10 @@ export class ChecklistOverlay {
   handleInput(data: string): void {
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c") || data === "q") {
       this.cb.onClose();
+      return;
+    }
+    if (data === "s" || data === "S") {
+      this.cb.onSettings?.();
       return;
     }
     if (matchesKey(data, "down") || data === "j") {
@@ -421,7 +427,7 @@ export class ChecklistOverlay {
       });
     }
     inner.push("");
-    inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · Esc/q to close")}`);
+    inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · s for settings · Esc/q to close")}`);
     // Same rounded-border chrome as the settings dialog: frameDialog draws
     // the ╭─╮/│/╰─╯ border with the title set into the top edge.
     const titleText = `checklist${this.title ? ` — ${this.title}` : ""}`;

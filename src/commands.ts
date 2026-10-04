@@ -124,12 +124,11 @@ export const CHECKLIST_USAGE =
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(
   ctx: ExtensionCommandContext,
-  getChecklist: () => import("./types.js").Checklist | null,
-  getRenderOpts: () => RenderOpts,
+  deps: Pick<ChecklistCommandDeps, "getChecklist" | "getRenderOpts" | "getDisplayMode" | "setDisplayMode" | "getStatusStyle" | "setStatusStyle" | "getIconSet" | "setIconSet" | "getUsage" | "setUsage" | "clear">,
 ): Promise<void> {
   if (ctx.mode !== "tui" || !ctx.hasUI) {
     // No popup surface in print mode — fall back to a text summary.
-    const checklist = getChecklist();
+    const checklist = deps.getChecklist();
     if (!checklist || checklist.tasks.length === 0) {
       ctx.ui.notify("checklist is empty", "info");
       return;
@@ -142,20 +141,30 @@ async function openChecklistDialog(
     ctx.ui.notify(`checklist ${c.done}/${c.total} done\n${rows}`, "info");
     return;
   }
-  const checklist = getChecklist();
-  const opts = getRenderOpts();
+  const checklist = deps.getChecklist();
+  const opts = deps.getRenderOpts();
+  // `s` jumps to settings: close this dialog first, then open the settings
+  // screen once the overlay promise settles (avoids nested overlays).
+  let goSettings = false;
   // ctx.ui.custom with overlay:true renders as a floating TUI dialog box
   // on top of the session (see tui.md "Overlays"). The ChecklistOverlay
-  // component handles j/k + arrows to scroll and Esc/q to close.
+  // component handles j/k + arrows to scroll, s for settings, Esc/q to close.
   await ctx.ui.custom<void>(
     (tui, theme, _kb, done) => {
       return new ChecklistOverlay(checklist, theme, {
         onClose: () => done(),
+        onSettings: () => {
+          goSettings = true;
+          done();
+        },
         requestRender: () => tui.requestRender(),
       }, opts);
     },
     { overlay: true, overlayOptions: { width: "70%", maxHeight: "70%", anchor: "center" } },
   );
+  if (goSettings) {
+    await openSettingsScreen(ctx, deps as ChecklistCommandDeps);
+  }
 }
 
 export interface ChecklistCommandDeps {
@@ -326,7 +335,7 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
         if (deps.getDisplayMode() === "hidden") {
           deps.setDisplayMode("statusbar", ctx);
         }
-        await openChecklistDialog(ctx, deps.getChecklist, deps.getRenderOpts);
+        await openChecklistDialog(ctx, deps);
         return;
       }
       if (action.name === "clear") {
@@ -379,7 +388,7 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
         return;
       }
       // open popup dialog (bare /checklist and /checklist show)
-      await openChecklistDialog(ctx, deps.getChecklist, deps.getRenderOpts);
+      await openChecklistDialog(ctx, deps);
     },
   };
   pi.registerCommand("checklist", options);

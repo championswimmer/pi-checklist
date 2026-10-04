@@ -94,10 +94,10 @@ export function parseChecklistArgs(raw) {
 }
 export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive]]";
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
-async function openChecklistDialog(ctx, getChecklist, getRenderOpts) {
+async function openChecklistDialog(ctx, deps) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
         // No popup surface in print mode — fall back to a text summary.
-        const checklist = getChecklist();
+        const checklist = deps.getChecklist();
         if (!checklist || checklist.tasks.length === 0) {
             ctx.ui.notify("checklist is empty", "info");
             return;
@@ -110,17 +110,27 @@ async function openChecklistDialog(ctx, getChecklist, getRenderOpts) {
         ctx.ui.notify(`checklist ${c.done}/${c.total} done\n${rows}`, "info");
         return;
     }
-    const checklist = getChecklist();
-    const opts = getRenderOpts();
+    const checklist = deps.getChecklist();
+    const opts = deps.getRenderOpts();
+    // `s` jumps to settings: close this dialog first, then open the settings
+    // screen once the overlay promise settles (avoids nested overlays).
+    let goSettings = false;
     // ctx.ui.custom with overlay:true renders as a floating TUI dialog box
     // on top of the session (see tui.md "Overlays"). The ChecklistOverlay
-    // component handles j/k + arrows to scroll and Esc/q to close.
+    // component handles j/k + arrows to scroll, s for settings, Esc/q to close.
     await ctx.ui.custom((tui, theme, _kb, done) => {
         return new ChecklistOverlay(checklist, theme, {
             onClose: () => done(),
+            onSettings: () => {
+                goSettings = true;
+                done();
+            },
             requestRender: () => tui.requestRender(),
         }, opts);
     }, { overlay: true, overlayOptions: { width: "70%", maxHeight: "70%", anchor: "center" } });
+    if (goSettings) {
+        await openSettingsScreen(ctx, deps);
+    }
 }
 /** One interactive screen for every checklist display preference, with a live preview. */
 async function openSettingsScreen(ctx, deps) {
@@ -260,7 +270,7 @@ export function registerChecklistCommand(pi, deps) {
                 if (deps.getDisplayMode() === "hidden") {
                     deps.setDisplayMode("statusbar", ctx);
                 }
-                await openChecklistDialog(ctx, deps.getChecklist, deps.getRenderOpts);
+                await openChecklistDialog(ctx, deps);
                 return;
             }
             if (action.name === "clear") {
@@ -312,7 +322,7 @@ export function registerChecklistCommand(pi, deps) {
                 return;
             }
             // open popup dialog (bare /checklist and /checklist show)
-            await openChecklistDialog(ctx, deps.getChecklist, deps.getRenderOpts);
+            await openChecklistDialog(ctx, deps);
         },
     };
     pi.registerCommand("checklist", options);

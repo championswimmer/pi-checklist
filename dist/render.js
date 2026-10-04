@@ -290,6 +290,10 @@ export class ChecklistOverlay {
             this.cb.onClose();
             return;
         }
+        if (data === "s" || data === "S") {
+            this.cb.onSettings?.();
+            return;
+        }
         if (matchesKey(data, "down") || data === "j") {
             if (this.selected < this.views.length - 1) {
                 this.selected++;
@@ -337,7 +341,7 @@ export class ChecklistOverlay {
             });
         }
         inner.push("");
-        inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · Esc/q to close")}`);
+        inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · s for settings · Esc/q to close")}`);
         // Same rounded-border chrome as the settings dialog: frameDialog draws
         // the ╭─╮/│/╰─╯ border with the title set into the top edge.
         const titleText = `checklist${this.title ? ` — ${this.title}` : ""}`;
