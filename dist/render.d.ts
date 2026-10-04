@@ -72,6 +72,8 @@ export declare function renderChecklistResult(result: {
 export interface OverlayCallbacks {
     onClose: () => void;
     requestRender: () => void;
+    /** Jump to the settings screen (the `s` shortcut). Optional so tests can omit it. */
+    onSettings?: () => void;
 }
 export declare class ChecklistOverlay {
     private views;
