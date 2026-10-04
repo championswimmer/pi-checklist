@@ -114,21 +114,14 @@ export function widgetLines(checklist, opts = DEFAULT_RENDER_OPTS) {
         const kind = statusKindOf(v);
         const glyph = glyphFor(kind, opts);
         const deps = v.blocked ? ` ← ${v.blockedBy.join(", ")}` : "";
-        return { kind, text: `${glyph} ${v.id}  ${v.title}${deps}`, pill: pillFor(kind) };
-    };
-    const subRowFor = (s) => {
-        const kind = statusKindOf(s);
-        const glyph = glyphFor(kind, opts);
-        const deps = s.blocked ? ` ← ${s.blockedBy.join(", ")}` : "";
-        return { kind, text: `  ↳ ${glyph} ${s.id}  ${s.title}${deps}`, pill: pillFor(kind) };
+        // Widget keeps one row per task: subtasks are not listed; an ↳ marker
+        // (or an equal-width blank) keeps titles aligned across rows.
+        const hasSubs = (v.subtaskViews ?? []).length > 0;
+        const marker = hasSubs ? "↳ " : "  ";
+        return { kind, text: `${marker}${glyph} ${v.id}  ${v.title}${deps}`, pill: pillFor(kind) };
     };
     for (const v of views.slice(0, WIDGET_MAX_TASKS)) {
         lines.push(rowFor(v));
-        // Subtasks ride along with their parent (the 5-row cap counts top-level
-        // tasks only; each parent holds at most 3 subtasks).
-        for (const s of v.subtaskViews ?? []) {
-            lines.push(subRowFor(s));
-        }
     }
     const hidden = views.length - WIDGET_MAX_TASKS;
     if (hidden > 0) {

@@ -339,13 +339,17 @@ test("S5: parent cannot step back to planned while a subtask is ongoing", () => 
 // Rendering
 // ---------------------------------------------------------------------------
 
-test("widget + views expose subtask rows under their parent", () => {
-  const checklist = parentWithSubs([{ title: "S1" }, { title: "S2" }]);
-  const [s1] = subIds(checklist);
-  const next = update(checklist, [{ id: "aaa", subtasks: [{ id: s1, status: "ongoing" }] }]);
-  const lines = widgetLines(next).map((l) => l.text);
-  assert.ok(lines.some((t) => t.startsWith("● aaa")), "parent row present");
-  const subRows = lines.filter((t) => t.includes("↳"));
-  assert.equal(subRows.length, 2);
-  assert.ok(subRows[0].includes(s1));
+test("widget shows a ↳ marker for tasks with subtasks (no subtask rows), blank slot otherwise", () => {
+  const withSubs = parentWithSubs([{ title: "S1" }, { title: "S2" }]);
+  const lines = widgetLines(withSubs).map((l) => l.text);
+  const parentRow = lines.find((t) => t.includes("aaa"));
+  assert.ok(parentRow?.startsWith("↳ ○ aaa"), "parent row has ↳ marker");
+  // No subtask rows in the widget at all.
+  assert.equal(lines.filter((t) => /  ↳ [a-z]/.test(t)).length, 0);
+
+  // A task without subtasks keeps the same alignment via a blank marker slot.
+  const plain = createOrAppend(null, { tasks: [{ id: "zzz", title: "Plain" }] }, 1).checklist;
+  const plainRow = widgetLines(plain).find((l) => l.text.includes("zzz"))?.text;
+  assert.ok(plainRow?.startsWith("  ○ zzz"), "plain row has blank marker slot");
+  assert.equal(plainRow?.indexOf("Plain") - plainRow?.indexOf("zzz"), parentRow?.indexOf("Parent") - parentRow?.indexOf("aaa"), "titles stay aligned");
 });
