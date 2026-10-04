@@ -61,6 +61,8 @@ export function loadGlobalPrefs(agentDir) {
         out.iconSet = v.iconSet;
     if (isUsageMode(v.usage))
         out.usage = v.usage;
+    if (typeof v.subtasksEnabled === "boolean")
+        out.subtasksEnabled = v.subtasksEnabled;
     return out;
 }
 /** Save global prefs (best-effort, silent fail for ephemeral/read-only sessions). */

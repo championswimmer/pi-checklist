@@ -16,6 +16,7 @@ export type ChecklistAction = {
     statusStyle?: StatusStyle;
     iconSet?: IconSet;
     usage?: UsageMode;
+    subtasksEnabled?: boolean;
 } | {
     name: "help";
 };
@@ -27,8 +28,10 @@ export declare function normalizeStatusStyle(raw: string): StatusStyle | undefin
 export declare function normalizeIconSet(raw: string): IconSet | undefined;
 /** Normalize a user-typed usage word to a UsageMode (accepts shorthands). */
 export declare function normalizeUsageMode(raw: string): UsageMode | undefined;
+/** Normalize a user-typed subtasks word to a boolean (preview toggle). */
+export declare function normalizeSubtasksSetting(raw: string): boolean | undefined;
 export declare function parseChecklistArgs(raw: string): ChecklistAction;
-export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive]]";
+export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
 export interface ChecklistCommandDeps {
     getDisplayMode: () => DisplayMode;
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
@@ -38,6 +41,8 @@ export interface ChecklistCommandDeps {
     setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void;
     getUsage: () => UsageMode;
     setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void;
+    getSubtasksEnabled: () => boolean;
+    setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
     getRenderOpts: () => RenderOpts;
     clear: (ctx: ExtensionCommandContext) => void;
     getChecklist: () => import("./types.js").Checklist | null;

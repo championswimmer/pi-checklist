@@ -20,6 +20,8 @@ export interface GlobalPrefs {
   statusStyle?: StatusStyle;
   iconSet?: IconSet;
   usage?: UsageMode;
+  /** Subtasks preview flag. Absent = off. */
+  subtasksEnabled?: boolean;
 }
 
 const PREFS_FILE = "pi-checklist.json";
@@ -63,6 +65,7 @@ export function loadGlobalPrefs(agentDir?: string): GlobalPrefs {
   if (isStatusStyle(v.statusStyle)) out.statusStyle = v.statusStyle;
   if (isIconSet(v.iconSet)) out.iconSet = v.iconSet;
   if (isUsageMode(v.usage)) out.usage = v.usage;
+  if (typeof v.subtasksEnabled === "boolean") out.subtasksEnabled = v.subtasksEnabled;
   return out;
 }
 

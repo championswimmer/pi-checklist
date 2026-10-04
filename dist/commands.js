@@ -43,6 +43,15 @@ export function normalizeUsageMode(raw) {
         return "aggressive";
     return undefined;
 }
+/** Normalize a user-typed subtasks word to a boolean (preview toggle). */
+export function normalizeSubtasksSetting(raw) {
+    const word = raw.trim().toLowerCase().replace(/_/g, "-");
+    if (word === "subtasks" || word === "subtask" || word === "sub-tasks" || word === "on")
+        return true;
+    if (word === "no-subtasks" || word === "nosubtasks" || word === "no-subtask" || word === "off")
+        return false;
+    return undefined;
+}
 export function parseChecklistArgs(raw) {
     const parts = raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const head = parts[0] ?? "";
@@ -62,6 +71,7 @@ export function parseChecklistArgs(raw) {
         let statusStyle;
         let iconSet;
         let usage;
+        let subtasksEnabled;
         for (const token of tokens) {
             const m = normalizeDisplayMode(token);
             if (m && displayMode === undefined) {
@@ -83,16 +93,21 @@ export function parseChecklistArgs(raw) {
                 usage = u;
                 continue;
             }
+            const st = normalizeSubtasksSetting(token);
+            if (st !== undefined && subtasksEnabled === undefined) {
+                subtasksEnabled = st;
+                continue;
+            }
             return { name: "help" };
         }
-        if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined) {
+        if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined && subtasksEnabled === undefined) {
             return { name: "help" };
         }
-        return { name: "settings", displayMode, statusStyle, iconSet, usage };
+        return { name: "settings", displayMode, statusStyle, iconSet, usage, subtasksEnabled };
     }
     return { name: "help" };
 }
-export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive]]";
+export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(ctx, deps) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
@@ -139,6 +154,7 @@ async function openSettingsScreen(ctx, deps) {
         let style = deps.getStatusStyle();
         let icons = deps.getIconSet();
         let usage = deps.getUsage();
+        let subtasks = deps.getSubtasksEnabled() ? "on" : "off";
         const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
         const previewBody = new Text("", 1, 0);
         const repaintPreview = (th) => {
@@ -181,6 +197,13 @@ async function openSettingsScreen(ctx, deps) {
                 values: [...USAGE_MODES],
                 description: "moderate: long-running / multi-step work only · aggressive: almost every task · changes the system prompt — takes effect after reload (/reload or a new session)",
             },
+            {
+                id: "subtasks",
+                label: "Subtasks (preview)",
+                currentValue: subtasks,
+                values: ["off", "on"],
+                description: "preview: nested subtasks inside tasks (at most 3 per task, sibling-only dependsOn)",
+            },
         ];
         // Dialog chrome is drawn by frameDialog (rounded box + title in the top
         // border) in render() below — pi-tui has no bordered-box component, so
@@ -208,6 +231,11 @@ async function openSettingsScreen(ctx, deps) {
                 // This setting is baked into the system prompt at load time —
                 // make the delayed-apply contract explicit in the notification.
                 ctx.ui.notify(`checklist usage guidance: ${USAGE_LABELS[newValue]} (takes effect after /reload or a new session)`, "info");
+            }
+            else if (id === "subtasks" && (newValue === "on" || newValue === "off")) {
+                subtasks = newValue;
+                deps.setSubtasksEnabled(newValue === "on", ctx);
+                ctx.ui.notify(`checklist subtasks (preview): ${newValue}`, "info");
             }
             repaintPreview(theme);
             repaintHint(theme);
@@ -249,7 +277,7 @@ export function registerChecklistCommand(pi, deps) {
             if (lower.startsWith("settings ") || lower === "settings") {
                 const rest = lower.startsWith("settings ") ? lower.slice("settings ".length) : "";
                 const last = rest.split(/\s+/).pop() ?? "";
-                const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES].filter((m) => m.startsWith(last));
+                const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES, "subtasks", "no-subtasks"].filter((m) => m.startsWith(last));
                 const base = rest.includes(" ") ? rest.slice(0, rest.lastIndexOf(" ") + 1) : "";
                 const values = candidates.map((m) => `settings ${base}${m}`);
                 return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
@@ -300,6 +328,10 @@ export function registerChecklistCommand(pi, deps) {
                 if (action.usage) {
                     deps.setUsage(action.usage, ctx);
                     applied.push(USAGE_LABELS[action.usage]);
+                }
+                if (action.subtasksEnabled !== undefined) {
+                    deps.setSubtasksEnabled(action.subtasksEnabled, ctx);
+                    applied.push(`Subtasks (preview): ${action.subtasksEnabled ? "on" : "off"}`);
                 }
                 if (applied.length > 0) {
                     if (action.usage) {

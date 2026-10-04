@@ -31,7 +31,7 @@ import {
   renderReadCall,
   renderUpdateCall,
 } from "./render.js";
-import { MAX_CHECKLIST_TASKS, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import {
   CREATE_GUIDELINES,
   CREATE_SNIPPET,
@@ -67,6 +67,7 @@ export default function (pi: ExtensionAPI) {
     statusStyle: globalSeed.statusStyle ?? "pill",
     iconSet: globalSeed.iconSet ?? "nerd-font",
     usage: globalSeed.usage ?? "moderate",
+    subtasksEnabled: globalSeed.subtasksEnabled ?? false,
   };
   // The usage-guidance hint is baked into the system prompt, so it is
   // captured ONCE here at extension load. setUsage below still persists the
@@ -81,6 +82,7 @@ export default function (pi: ExtensionAPI) {
   const getStatusStyle = (): StatusStyle => resolveStatusStyle(state);
   const getIconSet = (): IconSet => resolveIconSet(state);
   const getUsage = (): UsageMode => resolveUsage(state);
+  const getSubtasksEnabled = (): boolean => resolveSubtasksEnabled(state);
   const getRenderOpts = (): RenderOpts => ({ style: getStatusStyle(), iconSet: getIconSet() });
 
   function refreshUi(ctx: ExtensionContext): void {
@@ -140,6 +142,7 @@ export default function (pi: ExtensionAPI) {
       statusStyle: getStatusStyle(),
       iconSet: getIconSet(),
       usage: getUsage(),
+      subtasksEnabled: getSubtasksEnabled(),
     });
   }
 
@@ -159,6 +162,7 @@ export default function (pi: ExtensionAPI) {
         statusStyle: global.statusStyle ?? resolveStatusStyle(loaded),
         iconSet: global.iconSet ?? resolveIconSet(loaded),
         usage: global.usage ?? resolveUsage(loaded),
+        subtasksEnabled: global.subtasksEnabled ?? resolveSubtasksEnabled(loaded),
       };
     } catch {
       const global = loadGlobalPrefs();
@@ -169,6 +173,7 @@ export default function (pi: ExtensionAPI) {
         statusStyle: global.statusStyle ?? "pill",
         iconSet: global.iconSet ?? "nerd-font",
         usage: global.usage ?? "moderate",
+        subtasksEnabled: global.subtasksEnabled ?? false,
       };
     }
     refreshUi(ctx);
@@ -191,6 +196,7 @@ export default function (pi: ExtensionAPI) {
         getDisplayMode(),
         getStatusStyle(),
         getIconSet(),
+        getSubtasksEnabled(),
       );
       commit(mutation.snapshot, ctx);
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
@@ -207,7 +213,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: READ_GUIDELINES,
     parameters: ChecklistReadParams,
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-      const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet());
+      const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet(), getSubtasksEnabled());
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
     },
     renderCall: (_args, theme) => renderReadCall(theme),
@@ -229,6 +235,7 @@ export default function (pi: ExtensionAPI) {
         getDisplayMode(),
         getStatusStyle(),
         getIconSet(),
+        getSubtasksEnabled(),
       );
       commit(mutation.snapshot, ctx);
       return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
@@ -270,6 +277,13 @@ export default function (pi: ExtensionAPI) {
       savePrefs();
       refreshUi(ctx);
     },
+    getSubtasksEnabled,
+    setSubtasksEnabled: (enabled: boolean, ctx: ExtensionContext) => {
+      state = { ...state, subtasksEnabled: enabled };
+      persistSnapshot(state);
+      savePrefs();
+      refreshUi(ctx);
+    },
     getRenderOpts,
     clear: (ctx: ExtensionContext) => {
       state = {
@@ -280,6 +294,7 @@ export default function (pi: ExtensionAPI) {
         statusStyle: getStatusStyle(),
         iconSet: getIconSet(),
         usage: getUsage(),
+        subtasksEnabled: getSubtasksEnabled(),
       };
       persistSnapshot(state);
       refreshUi(ctx);
