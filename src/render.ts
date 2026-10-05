@@ -125,18 +125,24 @@ export function colorFor(kind: StatusKind): ThemeFgName {
   }
 }
 
-/** Shared first-line progress summary for the full widget and minimal footer. */
-function checklistSummary(checklist: Checklist): string {
+/** Compact summaries always use the selected artwork, regardless of row style. */
+function compactSummary(checklist: Checklist, opts: RenderOpts, title = ""): string {
   const c = countsOf(checklist);
-  const title = checklist.title ? ` ${checklist.title}` : "";
-  return `checklist${title}  ${c.done}/${c.total} done   ${c.ongoing} ongoing   ${c.ready} ready   ${c.blocked} blocked`;
+  const icons = opts.iconSet === "emoji" ? EMOJI_GLYPHS : NF_GLYPHS;
+  const checklistIcon = opts.iconSet === "emoji" ? "☑️" : "\uED7A"; // checklist
+  const cancelled = checklist.tasks.length - c.total;
+  const states: [StatusKind, number][] = [
+    ["done", c.done], ["ongoing", c.ongoing], ["ready", c.ready],
+    ["blocked", c.blocked], ["cancelled", cancelled],
+  ];
+  const counts = states.filter(([, count]) => count > 0).map(([kind, count]) => `${icons[kind]} ${count}`);
+  const progress = `${checklistIcon}${title} ${c.done}/${c.total}`;
+  return [progress, ...counts].join(" ");
 }
 
-export function footerText(checklist: Checklist | null, minimal = false): string | undefined {
+export function footerText(checklist: Checklist | null, opts: RenderOpts = DEFAULT_RENDER_OPTS): string | undefined {
   if (!checklist || checklist.tasks.length === 0) return undefined;
-  if (minimal) return checklistSummary(checklist);
-  const c = countsOf(checklist);
-  return `☑ ${c.done}/${c.total}`;
+  return compactSummary(checklist, opts);
 }
 
 export interface WidgetLine {
@@ -153,7 +159,11 @@ export const WIDGET_MAX_TASKS = 5;
 export function widgetLines(checklist: Checklist, opts: RenderOpts = DEFAULT_RENDER_OPTS): WidgetLine[] {
   const views = sortViews(viewsOf(checklist));
   const lines: WidgetLine[] = [];
-  lines.push({ kind: "header", text: checklistSummary(checklist) });
+  const title = checklist.title ? ` ${checklist.title}` : "";
+  lines.push({
+    kind: "header",
+    text: compactSummary(checklist, opts, title),
+  });
 
   const rowFor = (v: TaskView): WidgetLine => {
     const kind = statusKindOf(v);

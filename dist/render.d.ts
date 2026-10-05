@@ -26,7 +26,7 @@ export declare function pillFor(kind: StatusKind): StatusPill;
 export declare function paintPill(theme: Theme, pill: StatusPill): string;
 /** Row color per status kind (glyph + title, every style). */
 export declare function colorFor(kind: StatusKind): ThemeFgName;
-export declare function footerText(checklist: Checklist | null, minimal?: boolean): string | undefined;
+export declare function footerText(checklist: Checklist | null, opts?: RenderOpts): string | undefined;
 export interface WidgetLine {
     /** Base row text (glyph + id + title + blocked deps). Never embeds the pill. */
     text: string;

@@ -45,11 +45,11 @@ export default function (pi) {
             const hasTasks = !!checklist && checklist.tasks.length > 0;
             if (mode === "hidden" || !hasTasks) {
                 ctx.ui.setWidget(WIDGET_KEY, undefined);
-                ctx.ui.setStatus(STATUS_KEY, mode === "hidden" ? undefined : (footerText(checklist) ?? undefined));
+                ctx.ui.setStatus(STATUS_KEY, mode === "hidden" ? undefined : footerText(checklist, getRenderOpts()));
                 return;
             }
             // Footer stays live in all visible modes, including during turns.
-            ctx.ui.setStatus(STATUS_KEY, footerText(checklist, mode === "status-minimal") ?? undefined);
+            ctx.ui.setStatus(STATUS_KEY, footerText(checklist, getRenderOpts()));
             if (mode === "status-minimal") {
                 ctx.ui.setWidget(WIDGET_KEY, undefined);
                 return;

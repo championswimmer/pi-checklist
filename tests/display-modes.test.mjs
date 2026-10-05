@@ -28,13 +28,14 @@ test("status-minimal is validated, parsed, and restored from snapshots", () => {
   assert.equal(resolveDisplayMode({ v: 1, checklist, displayMode: "status-minimal" }), "status-minimal");
 });
 
-test("minimal footer is exactly the widget's first line, without task rows", () => {
-  const summary = footerText(checklist, true);
-  assert.equal(summary, widgetLines(checklist)[0].text);
-  assert.equal(summary, "checklist Release  1/4 done   1 ongoing   1 ready   1 blocked");
-  assert.equal(footerText(checklist), "☑ 1/4");
-  assert.equal(footerText(null, true), undefined);
-  assert.equal(footerText({ tasks: [] }, true), undefined);
+const opts = { style: "pill", iconSet: "emoji" };
+
+test("minimal footer shares the compact widget summary, without title or task rows", () => {
+  const summary = footerText(checklist, opts);
+  assert.equal(summary, widgetLines({ ...checklist, title: undefined }, opts)[0].text);
+  assert.equal(summary, "☑️ 1/4 ✅ 1 🔄 1 ▶️ 1 ⛔ 1");
+  assert.equal(footerText(null, opts), undefined);
+  assert.equal(footerText({ tasks: [] }, opts), undefined);
 });
 
 test("minimal mode persists globally and remains footer-only across turns and switches", async () => {
@@ -42,7 +43,7 @@ test("minimal mode persists globally and remains footer-only across turns and sw
   const previousDir = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = dir;
   try {
-    saveGlobalPrefs({ displayMode: "status-minimal" });
+    saveGlobalPrefs({ displayMode: "status-minimal", iconSet: "emoji" });
     assert.equal(loadGlobalPrefs().displayMode, "status-minimal");
     const events = new Map();
     const tools = new Map();
@@ -69,7 +70,7 @@ test("minimal mode persists globally and remains footer-only across turns and sw
     };
     const assertMinimal = () => {
       assert.equal(widget, undefined);
-      assert.equal(status, footerText(checklist, true));
+      assert.equal(status, footerText(checklist, opts));
     };
     for (const event of ["session_start", "turn_start", "turn_end", "agent_settled", "session_tree"]) {
       await events.get(event)({}, ctx);
@@ -77,14 +78,14 @@ test("minimal mode persists globally and remains footer-only across turns and sw
     }
     await command.handler("settings statusbar", ctx);
     assert.equal(typeof widget, "function");
-    assert.equal(status, "☑ 1/4");
+    assert.equal(status, "☑️ 1/4 ✅ 1 🔄 1 ▶️ 1 ⛔ 1");
     await command.handler("settings status-minimal", ctx);
     assertMinimal();
     assert.equal(entries.at(-1).displayMode, "status-minimal");
     assert.equal(loadGlobalPrefs().displayMode, "status-minimal");
     await tools.get("checklist_update").execute("update", { updates: [{ id: "bbb", status: "done" }] }, undefined, undefined, ctx);
     assert.equal(widget, undefined);
-    assert.match(status, /2\/4 done   0 ongoing/);
+    assert.equal(status, "☑️ 2/4 ✅ 2 ▶️ 1 ⛔ 1");
     await command.handler("hide", ctx);
     assert.equal(widget, undefined);
     assert.equal(status, undefined);
@@ -93,7 +94,7 @@ test("minimal mode persists globally and remains footer-only across turns and sw
     await events.get("turn_start")({}, ctx);
     assert.equal(widget, undefined);
     await command.handler("settings status-minimal", ctx);
-    assert.match(status, /2\/4 done/);
+    assert.equal(status, "☑️ 2/4 ✅ 2 ▶️ 1 ⛔ 1");
     assert.equal(widget, undefined);
     await command.handler("clear", ctx);
     assert.equal(status, undefined);

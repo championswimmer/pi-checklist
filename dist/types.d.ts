@@ -42,8 +42,8 @@ export interface Checklist {
 }
 /** How the checklist renders in the TUI.
  *
- * - "statusbar": persistent widget below the input box + footer counter (current behavior).
- * - "status-minimal": first-line progress summary in the footer only, no widget.
+ * - "statusbar": persistent widget below the input box + compact footer summary.
+ * - "status-minimal": compact progress summary in the footer only, no widget.
  * - "end-of-turn": widget above the input box, shown when a turn settles
  *   (cleared when a turn starts, re-shown on turn_end / agent_settled).
  * - "hidden": no widget or footer; use /checklist (overlay) or
@@ -63,7 +63,7 @@ export declare function isDisplayMode(value: unknown): value is DisplayMode;
 export type StatusStyle = "color" | "pill" | "icon";
 export declare const STATUS_STYLES: readonly StatusStyle[];
 export declare function isStatusStyle(value: unknown): value is StatusStyle;
-/** Which icon artwork the "icon" status style uses.
+/** Icon artwork for compact summaries and the "icon" task-row status style.
  *
  * - "nerd-font": Nerd Font glyphs (Octicons block, single-cell; needs a
  *   Nerd Font patched font in the terminal — see nerdfonts.com).

@@ -48,8 +48,8 @@ A session checklist holds at most **10 tasks**. The live TUI widget shows the **
 
 Display placement:
 
-- `statusbar` — persistent widget below the input box + footer (default).
-- `status-minimal` — only the first-line progress summary (done/total, ongoing, ready, blocked) in the statusline; no task widget. Enable with `/checklist settings status-minimal`.
+- `statusbar` — persistent widget below the input box + footer (default). Both summaries use a checkmark, done/total ratio, then icon counts for done, ongoing, ready, blocked and cancelled, e.g. `☑️ 2/5 ✅ 2 🔄 3`. Zero-count states are hidden, with one space after each icon and between groups. They always honor your Nerd Font / emoji setting, regardless of task-row style; the footer omits the checklist title. Cancelled tasks don't count toward the progress denominator.
+- `status-minimal` — only the compact icon summary described above in the statusline; no task widget. Enable with `/checklist settings status-minimal`.
 - `end-of-turn` — widget above the input box, refreshed when each turn settles.
 - `hidden` — no widget or footer; reopen with `/checklist` (overlay) or `/checklist show`.
 
@@ -59,7 +59,7 @@ Progress status style:
 - `pill` — the status word is a pill: text on a colored background (default).
 - `icon` — status is a leading progress icon only, no status word.
 
-Progress icons (for the `icon` style):
+Progress icons (for compact summaries and the `icon` task-row style):
 
 - `nerd-font` — Nerd Font Octicons: sync / play / blocked / check-circle / x-circle (needs a Nerd Font patched font — get one at nerdfonts.com; default).
 - `emoji` — 🔄 ▶️ ⛔ ✅ ❌ (works anywhere).
