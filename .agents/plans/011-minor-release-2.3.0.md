@@ -1,6 +1,6 @@
 # 011 — Minor release 2.3.0
 
-Status: In progress
+Status: Complete
 
 ## Scope and decisions
 
@@ -16,4 +16,9 @@ Status: In progress
 
 ## Results
 
-Pending.
+- Integrated origin's existing v2.2.0/status-minimal work without dropping the footer-only mode; updated its regression tests for the approved icon summary.
+- All 33 tests pass; source extension print/TUI smoke passes for full statusbar and footer-only status-minimal with isolated preferences.
+- Feature commit: `cb8da8d` (`feat: compact checklist summaries with configurable icons`).
+- Release script completed: v2.2.0 → v2.3.0. Version commit `8ebbf10`; main and annotated tag pushed successfully.
+- Release workflow succeeded: https://github.com/championswimmer/pi-checklist/actions/runs/37390008391
+- CI's trusted publisher accepted `pi-checklist@2.3.0` with provenance; npm reports the package is being processed and may take a few minutes to become available. The immediate registry lookup still returned 404 (propagation), not a publishing failure.
