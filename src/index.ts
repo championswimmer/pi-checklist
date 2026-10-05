@@ -17,6 +17,7 @@
  *
  * Display modes (see /checklist settings):
  * - "statusbar": persistent widget below the input box + footer (default).
+ * - "status-minimal": first-line progress summary in the footer only.
  * - "end-of-turn": widget above the input box, shown when a turn settles.
  * - "hidden": no widget or footer; /checklist overlay still works.
  */
@@ -96,8 +97,12 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.setStatus(STATUS_KEY, mode === "hidden" ? undefined : (footerText(checklist) ?? undefined));
         return;
       }
-      // Footer stays live in both visible modes (cheap, out of the way).
-      ctx.ui.setStatus(STATUS_KEY, footerText(checklist) ?? undefined);
+      // Footer stays live in all visible modes, including during turns.
+      ctx.ui.setStatus(STATUS_KEY, footerText(checklist, mode === "status-minimal") ?? undefined);
+      if (mode === "status-minimal") {
+        ctx.ui.setWidget(WIDGET_KEY, undefined);
+        return;
+      }
       // End-of-turn mode defers the full widget until the turn settles.
       if (mode === "end-of-turn" && inTurn) {
         ctx.ui.setWidget(WIDGET_KEY, undefined);

@@ -48,17 +48,18 @@ export interface Checklist {
 /** How the checklist renders in the TUI.
  *
  * - "statusbar": persistent widget below the input box + footer counter (current behavior).
+ * - "status-minimal": first-line progress summary in the footer only, no widget.
  * - "end-of-turn": widget above the input box, shown when a turn settles
  *   (cleared when a turn starts, re-shown on turn_end / agent_settled).
  * - "hidden": no widget or footer; use /checklist (overlay) or
  *   /checklist show (back to statusbar) to see it.
  */
-export type DisplayMode = "statusbar" | "end-of-turn" | "hidden";
+export type DisplayMode = "statusbar" | "status-minimal" | "end-of-turn" | "hidden";
 
-export const DISPLAY_MODES: readonly DisplayMode[] = ["statusbar", "end-of-turn", "hidden"];
+export const DISPLAY_MODES: readonly DisplayMode[] = ["statusbar", "status-minimal", "end-of-turn", "hidden"];
 
 export function isDisplayMode(value: unknown): value is DisplayMode {
-  return value === "statusbar" || value === "end-of-turn" || value === "hidden";
+  return value === "statusbar" || value === "status-minimal" || value === "end-of-turn" || value === "hidden";
 }
 
 /** How per-task progress status is shown in the widget / overlay / transcript.

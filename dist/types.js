@@ -1,7 +1,7 @@
 /** Shared types for pi-checklist. Pure — no pi imports. */
-export const DISPLAY_MODES = ["statusbar", "end-of-turn", "hidden"];
+export const DISPLAY_MODES = ["statusbar", "status-minimal", "end-of-turn", "hidden"];
 export function isDisplayMode(value) {
-    return value === "statusbar" || value === "end-of-turn" || value === "hidden";
+    return value === "statusbar" || value === "status-minimal" || value === "end-of-turn" || value === "hidden";
 }
 export const STATUS_STYLES = ["color", "pill", "icon"];
 export function isStatusStyle(value) {

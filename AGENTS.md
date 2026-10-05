@@ -119,6 +119,8 @@ Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in
 - [x] Subtasks preview (plan 007): `Subtask` nested in `Task.subtasks?`, `MAX_SUBTASKS_PER_TASK = 3`, sibling-scoped `dependsOn`, state primitives S1–S6 in `store.ts` (completion guard / auto-progress / inherited block / terminal freeze + cancel cascade / step-back guard / capacity), `subtasksEnabled` setting labelled `(preview)` in `/checklist settings` + quick-set (`subtasks`/`no-subtasks`), persisted snapshot + global prefs; widget/overlay/transcript render indented `↳` rows; `tests/subtasks.test.mjs` covers the lifecycles (20 checks green with limits suite)
 - Overlay expand/collapse: the `/checklist` dialog opens with all tasks collapsed (`ChecklistOverlay.expanded: Set<taskId>`), `→`/`l` expands the selected task's subtask rows, `←`/`h` collapses (also from a subtask row, collapsing its parent); `▸`/`▾` marker slot (blank for tasks without subtasks) keeps rows aligned, selection walks the flat task+visible-subtask row list and is re-clamped after a collapse; footer hint updated (21 checks green)
 
+- [x] Status-minimal display (plan 008): `status-minimal` shows only the full widget’s first-line progress summary in the footer (done/total, ongoing, ready, blocked), never task rows. Settings picker and `/checklist settings status-minimal` support it; session/global prefs restore it. `tests/display-modes.test.mjs` covers parsing, persistence, lifecycle, mode switches, mutations, and clearing.
+
 ## Publishing notes
 
 - GitHub repo: `https://github.com/championswimmer/pi-checklist`

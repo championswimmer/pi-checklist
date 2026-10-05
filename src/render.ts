@@ -125,8 +125,16 @@ export function colorFor(kind: StatusKind): ThemeFgName {
   }
 }
 
-export function footerText(checklist: Checklist | null): string | undefined {
+/** Shared first-line progress summary for the full widget and minimal footer. */
+function checklistSummary(checklist: Checklist): string {
+  const c = countsOf(checklist);
+  const title = checklist.title ? ` ${checklist.title}` : "";
+  return `checklist${title}  ${c.done}/${c.total} done   ${c.ongoing} ongoing   ${c.ready} ready   ${c.blocked} blocked`;
+}
+
+export function footerText(checklist: Checklist | null, minimal = false): string | undefined {
   if (!checklist || checklist.tasks.length === 0) return undefined;
+  if (minimal) return checklistSummary(checklist);
   const c = countsOf(checklist);
   return `☑ ${c.done}/${c.total}`;
 }
@@ -144,13 +152,8 @@ export const WIDGET_MAX_TASKS = 5;
 
 export function widgetLines(checklist: Checklist, opts: RenderOpts = DEFAULT_RENDER_OPTS): WidgetLine[] {
   const views = sortViews(viewsOf(checklist));
-  const c = countsOf(checklist);
   const lines: WidgetLine[] = [];
-  const title = checklist.title ? ` ${checklist.title}` : "";
-  lines.push({
-    kind: "header",
-    text: `checklist${title}  ${c.done}/${c.total} done   ${c.ongoing} ongoing   ${c.ready} ready   ${c.blocked} blocked`,
-  });
+  lines.push({ kind: "header", text: checklistSummary(checklist) });
 
   const rowFor = (v: TaskView): WidgetLine => {
     const kind = statusKindOf(v);
@@ -243,12 +246,14 @@ export function frameDialog(title: string, inner: string[], width: number, theme
 
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   statusbar: "statusbar — below the input box",
+  "status-minimal": "status-minimal — summary in footer only",
   "end-of-turn": "end of turn — above the input box",
   hidden: "hidden — off, open on demand",
 };
 
 export const DISPLAY_MODE_DESCRIPTIONS: Record<DisplayMode, string> = {
   statusbar: "Persistent widget below the input box + footer counter.",
+  "status-minimal": "First-line progress summary in the footer only. No task widget.",
   "end-of-turn": "Widget above the input box, refreshed when each turn settles.",
   hidden: "No widget or footer. Open with /checklist (overlay) or /checklist show.",
 };

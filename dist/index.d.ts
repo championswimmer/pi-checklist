@@ -17,6 +17,7 @@
  *
  * Display modes (see /checklist settings):
  * - "statusbar": persistent widget below the input box + footer (default).
+ * - "status-minimal": first-line progress summary in the footer only.
  * - "end-of-turn": widget above the input box, shown when a turn settles.
  * - "hidden": no widget or footer; /checklist overlay still works.
  */

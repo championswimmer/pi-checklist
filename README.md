@@ -49,6 +49,7 @@ A session checklist holds at most **10 tasks**. The live TUI widget shows the **
 Display placement:
 
 - `statusbar` — persistent widget below the input box + footer (default).
+- `status-minimal` — only the first-line progress summary (done/total, ongoing, ready, blocked) in the statusline; no task widget. Enable with `/checklist settings status-minimal`.
 - `end-of-turn` — widget above the input box, refreshed when each turn settles.
 - `hidden` — no widget or footer; reopen with `/checklist` (overlay) or `/checklist show`.
 

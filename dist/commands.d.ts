@@ -31,7 +31,7 @@ export declare function normalizeUsageMode(raw: string): UsageMode | undefined;
 /** Normalize a user-typed subtasks word to a boolean (preview toggle). */
 export declare function normalizeSubtasksSetting(raw: string): boolean | undefined;
 export declare function parseChecklistArgs(raw: string): ChecklistAction;
-export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
+export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
 export interface ChecklistCommandDeps {
     getDisplayMode: () => DisplayMode;
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;

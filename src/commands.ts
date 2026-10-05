@@ -41,6 +41,7 @@ export type ChecklistAction =
 export function normalizeDisplayMode(raw: string): DisplayMode | undefined {
   const word = raw.trim().toLowerCase().replace(/_/g, "-");
   if (word === "statusbar" || word === "status") return "statusbar";
+  if (word === "status-minimal") return "status-minimal";
   if (word === "end-of-turn" || word === "endofturn" || word === "end" || word === "turn") return "end-of-turn";
   if (word === "hidden" || word === "hide" || word === "off" || word === "none") return "hidden";
   return undefined;
@@ -133,7 +134,7 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
 }
 
 export const CHECKLIST_USAGE =
-  "Usage: /checklist [show|hide|clear|settings [statusbar|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
+  "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
 
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(
@@ -228,7 +229,7 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
         label: "Checklist display",
         currentValue: display,
         values: [...DISPLAY_MODES],
-        description: "statusbar: below the input box · end-of-turn: above it · hidden: off",
+        description: "statusbar: below the input box · status-minimal: summary in footer only · end-of-turn: above it · hidden: off",
       },
       {
         id: "status",

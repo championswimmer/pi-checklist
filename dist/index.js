@@ -48,8 +48,12 @@ export default function (pi) {
                 ctx.ui.setStatus(STATUS_KEY, mode === "hidden" ? undefined : (footerText(checklist) ?? undefined));
                 return;
             }
-            // Footer stays live in both visible modes (cheap, out of the way).
-            ctx.ui.setStatus(STATUS_KEY, footerText(checklist) ?? undefined);
+            // Footer stays live in all visible modes, including during turns.
+            ctx.ui.setStatus(STATUS_KEY, footerText(checklist, mode === "status-minimal") ?? undefined);
+            if (mode === "status-minimal") {
+                ctx.ui.setWidget(WIDGET_KEY, undefined);
+                return;
+            }
             // End-of-turn mode defers the full widget until the turn settles.
             if (mode === "end-of-turn" && inTurn) {
                 ctx.ui.setWidget(WIDGET_KEY, undefined);
