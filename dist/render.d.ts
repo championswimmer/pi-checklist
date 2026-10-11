@@ -52,8 +52,8 @@ export declare const ICON_SET_LABELS: Record<IconSet, string>;
 export declare const ICON_SET_DESCRIPTIONS: Record<IconSet, string>;
 export declare const USAGE_LABELS: Record<UsageMode, string>;
 export declare const USAGE_DESCRIPTIONS: Record<UsageMode, string>;
-/** Sample rows for the /checklist settings preview (uses a fake `abc` id). */
-export declare function previewLines(theme: Theme, opts: RenderOpts): string[];
+/** Sample rows for settings; demo subtasks never touch the session checklist. */
+export declare function previewLines(theme: Theme, opts: RenderOpts, subtasksEnabled?: boolean): string[];
 export declare function renderCreateCall(args: {
     tasks?: Array<{
         title?: string;

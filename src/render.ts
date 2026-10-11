@@ -300,19 +300,29 @@ export const USAGE_DESCRIPTIONS: Record<UsageMode, string> = {
   aggressive: "Hint steers you to the checklist for almost every task, even small ones; only trivial single-step questions go untracked.",
 };
 
-/** Sample rows for the /checklist settings preview (uses a fake `abc` id). */
-export function previewLines(theme: Theme, opts: RenderOpts): string[] {
-  const samples: Array<{ kind: StatusKind; title: string }> = [
-    { kind: "ongoing", title: "Write the widget" },
-    { kind: "ready", title: "Update the docs" },
+/** Sample rows for settings; demo subtasks never touch the session checklist. */
+export function previewLines(theme: Theme, opts: RenderOpts, subtasksEnabled = false): string[] {
+  type Sample = { kind: StatusKind; title: string; subtasks?: Sample[] };
+  const samples: Sample[] = [
+    { kind: "ongoing", title: "Write the widget", subtasks: [
+      { kind: "done", title: "Design the layout" },
+      { kind: "ongoing", title: "Render task rows" },
+    ] },
+    { kind: "ready", title: "Update the docs", subtasks: [
+      { kind: "ready", title: "Document settings" },
+    ] },
     { kind: "blocked", title: "Publish release" },
     { kind: "done", title: "Scaffold repo" },
     { kind: "cancelled", title: "Drop the prototype" },
   ];
-  return samples.map(({ kind, title }) => {
+  const renderSample = ({ kind, title }: Sample, indent = "") => {
     const row = theme.fg(colorFor(kind), `${glyphFor(kind, opts)} abc ${title}`);
-    return opts.style === "pill" ? `${paintPill(theme, pillFor(kind))}  ${row}` : row;
-  });
+    return indent + (opts.style === "pill" ? `${paintPill(theme, pillFor(kind))}  ${row}` : row);
+  };
+  return samples.flatMap((sample) => [
+    renderSample(sample),
+    ...(subtasksEnabled ? (sample.subtasks ?? []).map((subtask) => renderSample(subtask, "  ↳ ")) : []),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
