@@ -210,7 +210,7 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
     const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
     const previewBody = new Text("", 1, 0);
     const repaintPreview = (th: Theme) => {
-      previewBody.setText(previewLines(th, { style, iconSet: icons }).join("\n"));
+      previewBody.setText(previewLines(th, { style, iconSet: icons }, subtasks === "on").join("\n"));
     };
     // Small hint under the icons row: Nerd Font glyphs need a patched font.
     // Shown only while the nerd-font set is selected.
