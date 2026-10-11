@@ -52,6 +52,8 @@ test("settings renders initial preference and toggles demo children immediately"
       getUsage: () => "moderate",
       getSubtasksEnabled: () => enabled,
       setSubtasksEnabled: (value) => { enabled = value; persisted.push(value); },
+      getMetaEnabled: () => false,
+      setMetaEnabled() {},
       getChecklist: () => { throw new Error("Settings preview must not read session tasks"); },
     });
     await command.handler("settings", {
