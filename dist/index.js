@@ -1,7 +1,7 @@
 import { registerChecklistCommand } from "./commands.js";
 import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
-import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveMetaEnabled, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -21,6 +21,7 @@ export default function (pi) {
         iconSet: globalSeed.iconSet ?? "nerd-font",
         usage: globalSeed.usage ?? "moderate",
         subtasksEnabled: globalSeed.subtasksEnabled ?? false,
+        metaEnabled: globalSeed.metaEnabled ?? false,
     };
     // The usage-guidance hint is baked into the system prompt, so it is
     // captured ONCE here at extension load. setUsage below still persists the
@@ -35,6 +36,7 @@ export default function (pi) {
     const getIconSet = () => resolveIconSet(state);
     const getUsage = () => resolveUsage(state);
     const getSubtasksEnabled = () => resolveSubtasksEnabled(state);
+    const getMetaEnabled = () => resolveMetaEnabled(state);
     const getRenderOpts = () => ({ style: getStatusStyle(), iconSet: getIconSet() });
     function refreshUi(ctx) {
         if (!ctx.hasUI)
@@ -94,6 +96,7 @@ export default function (pi) {
             iconSet: getIconSet(),
             usage: getUsage(),
             subtasksEnabled: getSubtasksEnabled(),
+            metaEnabled: getMetaEnabled(),
         });
     }
     function reconstruct(ctx) {
@@ -113,6 +116,7 @@ export default function (pi) {
                 iconSet: global.iconSet ?? resolveIconSet(loaded),
                 usage: global.usage ?? resolveUsage(loaded),
                 subtasksEnabled: global.subtasksEnabled ?? resolveSubtasksEnabled(loaded),
+                metaEnabled: global.metaEnabled ?? resolveMetaEnabled(loaded),
             };
         }
         catch {
@@ -125,6 +129,7 @@ export default function (pi) {
                 iconSet: global.iconSet ?? "nerd-font",
                 usage: global.usage ?? "moderate",
                 subtasksEnabled: global.subtasksEnabled ?? false,
+                metaEnabled: global.metaEnabled ?? false,
             };
         }
         refreshUi(ctx);
@@ -138,7 +143,7 @@ export default function (pi) {
         promptGuidelines: CREATE_GUIDELINES,
         parameters: ChecklistCreateParams,
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-            const mutation = executeCreate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet(), getSubtasksEnabled());
+            const mutation = executeCreate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet(), getSubtasksEnabled(), getMetaEnabled());
             commit(mutation.snapshot, ctx);
             return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
         },
@@ -153,7 +158,7 @@ export default function (pi) {
         promptGuidelines: READ_GUIDELINES,
         parameters: ChecklistReadParams,
         async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-            const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet(), getSubtasksEnabled());
+            const mutation = executeRead(state.checklist, params, getStatusStyle(), getIconSet(), getSubtasksEnabled(), getMetaEnabled());
             return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
         },
         renderCall: (_args, theme) => renderReadCall(theme),
@@ -167,7 +172,7 @@ export default function (pi) {
         promptGuidelines: UPDATE_GUIDELINES,
         parameters: ChecklistUpdateParams,
         async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-            const mutation = executeUpdate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet(), getSubtasksEnabled());
+            const mutation = executeUpdate(state.checklist, state.widgetVisible, params, getDisplayMode(), getStatusStyle(), getIconSet(), getSubtasksEnabled(), getMetaEnabled());
             commit(mutation.snapshot, ctx);
             return { content: [{ type: "text", text: mutation.text }], details: mutation.snapshot };
         },
@@ -213,6 +218,13 @@ export default function (pi) {
             savePrefs();
             refreshUi(ctx);
         },
+        getMetaEnabled,
+        setMetaEnabled: (enabled, ctx) => {
+            state = { ...state, metaEnabled: enabled };
+            persistSnapshot(state);
+            savePrefs();
+            refreshUi(ctx);
+        },
         getRenderOpts,
         clear: (ctx) => {
             state = {
@@ -224,6 +236,7 @@ export default function (pi) {
                 iconSet: getIconSet(),
                 usage: getUsage(),
                 subtasksEnabled: getSubtasksEnabled(),
+                metaEnabled: getMetaEnabled(),
             };
             persistSnapshot(state);
             refreshUi(ctx);
@@ -257,7 +270,12 @@ export default function (pi) {
             // above): explicitly tell the model whether subtasks exist at all.
             (getSubtasksEnabled()
                 ? ` Tasks can have up to ${MAX_SUBTASKS_PER_TASK} subtasks each: use them to break larger tasks down.`
-                : " Tasks have no subtasks.");
+                : " Tasks have no subtasks.") +
+            // Live task-meta state (same per-turn re-evaluation): only mentioned
+            // when enabled, so the default prompt stays unchanged.
+            (getMetaEnabled()
+                ? " Tasks and subtasks can carry a small meta object of key/value facts (string, number or boolean values): pass meta on checklist_create, merge new keys with meta on checklist_update (listed keys are set, others stay), and set a key to null to delete it."
+                : "");
         const checklist = state.checklist;
         const open = !!checklist &&
             checklist.tasks.length > 0 &&

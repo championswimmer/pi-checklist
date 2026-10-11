@@ -63,6 +63,8 @@ export function loadGlobalPrefs(agentDir) {
         out.usage = v.usage;
     if (typeof v.subtasksEnabled === "boolean")
         out.subtasksEnabled = v.subtasksEnabled;
+    if (typeof v.metaEnabled === "boolean")
+        out.metaEnabled = v.metaEnabled;
     return out;
 }
 /** Save global prefs (best-effort, silent fail for ephemeral/read-only sessions). */

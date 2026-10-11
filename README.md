@@ -79,9 +79,19 @@ Subtasks (preview):
 - In the `/checklist` dialog, tasks open **collapsed**; press **→** (or `l`) on a task with subtasks to expand it and **←** (or `h`) to collapse (works from a subtask row too).
 - State primitives: a parent cannot finish (`→ done`) while any subtask is still open (`planned`/`ongoing` — `cancelled` counts as resolved); starting a subtask pulls a `planned` parent to `ongoing` automatically; a subtask cannot start while its parent is blocked (it inherits the parent's block); cancelling a parent cascade-cancels its open subtasks; finish parent + subtasks together in **one** `checklist_update` entry.
 
+Task meta (preview):
+
+- Free-form key/value facts on a task or subtask — e.g. `{ "agent": "impl-auth", "pr": 42 }` — so the agent (or another extension driving the same tools) can tag work. No namespaces, claims or special API: it is just a flat `meta` object.
+- Enable with `/checklist settings meta` (off with `/checklist settings no-meta`); the settings screen has a matching `Task meta (preview)` toggle. It persists like the other settings and applies immediately; while it is on, the system prompt tells the agent how to use meta.
+- **Create:** `checklist_create` tasks (and subtasks) accept `meta: { key: value }`.
+- **Update:** `checklist_update` entries (and subtask patches) take `meta`, which is **merged** into the existing meta — listed keys are set/overwritten, unlisted keys stay, and `key: null` deletes that key. Deleting the last key removes `meta`.
+- Values are `string` (≤ 200 chars), finite `number` or `boolean`; keys are 1–40 chars; at most 10 keys per task. Anything else (objects, arrays) is rejected. `null` only means "delete" in updates (it is skipped on create).
+- Gating matches subtasks: a non-empty `meta` is rejected while the preview is off. Meta already stored is kept (just hidden) if you switch it off. Done tasks stay frozen, meta included.
+- `checklist_read` lists each task's meta when the feature is on. In the TUI, **only the `/checklist` dialog** shows it: aligned `key: value` rows under each task (and under expanded subtasks) that has meta. The widget, footer and status line never show meta, and the rows are not selectable, so navigation and expand/collapse are unchanged. The dialog scrolls with the selection to fit short terminals (borders and key hint stay visible; the header shows `rows a–b of n`), and a task whose meta alone is taller than the dialog shows `… +N more`.
+
 `/checklist hide` is shorthand for hidden mode.
 
-State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet` / `usage` / `subtasksEnabled`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
+State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet` / `usage` / `subtasksEnabled` / `metaEnabled`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
 
 ## Install
 

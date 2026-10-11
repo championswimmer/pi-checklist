@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@earendil-wor
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { Container, SettingsList, Text, type SettingItem } from "@earendil-works/pi-tui";
 import {
+  DIALOG_MAX_HEIGHT_PERCENT,
   DISPLAY_MODE_DESCRIPTIONS,
   DISPLAY_MODE_LABELS,
   ICON_SET_DESCRIPTIONS,
@@ -10,6 +11,7 @@ import {
   USAGE_DESCRIPTIONS,
   USAGE_LABELS,
   ChecklistOverlay,
+  dialogMaxRows,
   frameDialog,
   previewLines,
   type RenderOpts,
@@ -34,7 +36,7 @@ export type ChecklistAction =
   | { name: "show" }
   | { name: "hide" }
   | { name: "clear" }
-  | { name: "settings"; displayMode?: DisplayMode; statusStyle?: StatusStyle; iconSet?: IconSet; usage?: UsageMode; subtasksEnabled?: boolean }
+  | { name: "settings"; displayMode?: DisplayMode; statusStyle?: StatusStyle; iconSet?: IconSet; usage?: UsageMode; subtasksEnabled?: boolean; metaEnabled?: boolean }
   | { name: "help" };
 
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
@@ -82,6 +84,15 @@ export function normalizeSubtasksSetting(raw: string): boolean | undefined {
   return undefined;
 }
 
+/** Normalize a user-typed meta word to a boolean (preview toggle). Bare
+ * on/off stay with subtasks, so meta needs its own words. */
+export function normalizeMetaSetting(raw: string): boolean | undefined {
+  const word = raw.trim().toLowerCase().replace(/_/g, "-");
+  if (word === "meta" || word === "task-meta") return true;
+  if (word === "no-meta" || word === "nometa" || word === "no-task-meta") return false;
+  return undefined;
+}
+
 export function parseChecklistArgs(raw: string): ChecklistAction {
   const parts = raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const head = parts[0] ?? "";
@@ -97,6 +108,7 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
     let iconSet: IconSet | undefined;
     let usage: UsageMode | undefined;
     let subtasksEnabled: boolean | undefined;
+    let metaEnabled: boolean | undefined;
     for (const token of tokens) {
       const m = normalizeDisplayMode(token);
       if (m && displayMode === undefined) {
@@ -123,23 +135,28 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
         subtasksEnabled = st;
         continue;
       }
+      const me = normalizeMetaSetting(token);
+      if (me !== undefined && metaEnabled === undefined) {
+        metaEnabled = me;
+        continue;
+      }
       return { name: "help" };
     }
-    if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined && subtasksEnabled === undefined) {
+    if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined && subtasksEnabled === undefined && metaEnabled === undefined) {
       return { name: "help" };
     }
-    return { name: "settings", displayMode, statusStyle, iconSet, usage, subtasksEnabled };
+    return { name: "settings", displayMode, statusStyle, iconSet, usage, subtasksEnabled, metaEnabled };
   }
   return { name: "help" };
 }
 
 export const CHECKLIST_USAGE =
-  "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
+  "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(
   ctx: ExtensionCommandContext,
-  deps: Pick<ChecklistCommandDeps, "getChecklist" | "getRenderOpts" | "getDisplayMode" | "setDisplayMode" | "getStatusStyle" | "setStatusStyle" | "getIconSet" | "setIconSet" | "getUsage" | "setUsage" | "getSubtasksEnabled" | "setSubtasksEnabled" | "clear">,
+  deps: Pick<ChecklistCommandDeps, "getChecklist" | "getRenderOpts" | "getDisplayMode" | "setDisplayMode" | "getStatusStyle" | "setStatusStyle" | "getIconSet" | "setIconSet" | "getUsage" | "setUsage" | "getSubtasksEnabled" | "setSubtasksEnabled" | "getMetaEnabled" | "setMetaEnabled" | "clear">,
 ): Promise<void> {
   if (ctx.mode !== "tui" || !ctx.hasUI) {
     // No popup surface in print mode — fall back to a text summary.
@@ -173,9 +190,12 @@ async function openChecklistDialog(
           done();
         },
         requestRender: () => tui.requestRender(),
-      }, opts);
+        // pi-tui slices overlay lines to maxHeight with no scrolling, so the
+        // dialog windows its own rows against the live terminal height.
+        getMaxRows: () => dialogMaxRows(tui.terminal.rows),
+      }, opts, deps.getMetaEnabled());
     },
-    { overlay: true, overlayOptions: { width: "70%", maxHeight: "70%", anchor: "center" } },
+    { overlay: true, overlayOptions: { width: "70%", maxHeight: `${DIALOG_MAX_HEIGHT_PERCENT}%`, anchor: "center" } },
   );
   if (goSettings) {
     await openSettingsScreen(ctx, deps as ChecklistCommandDeps);
@@ -193,6 +213,8 @@ export interface ChecklistCommandDeps {
   setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void;
   getSubtasksEnabled: () => boolean;
   setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
+  getMetaEnabled: () => boolean;
+  setMetaEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
   getRenderOpts: () => RenderOpts;
   clear: (ctx: ExtensionCommandContext) => void;
   getChecklist: () => import("./types.js").Checklist | null;
@@ -206,6 +228,7 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
     let icons = deps.getIconSet();
     let usage = deps.getUsage();
     let subtasks = deps.getSubtasksEnabled() ? "on" : "off";
+    let meta = deps.getMetaEnabled() ? "on" : "off";
 
     const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
     const previewBody = new Text("", 1, 0);
@@ -261,6 +284,14 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
         description:
           "preview: nested subtasks inside tasks (at most 3 per task, sibling-only dependsOn)",
       },
+      {
+        id: "meta",
+        label: "Task meta (preview)",
+        currentValue: meta,
+        values: ["off", "on"],
+        description:
+          "preview: key/value meta on tasks (set on create, merge on update, null deletes); shown in the /checklist dialog",
+      },
     ];
 
     // Dialog chrome is drawn by frameDialog (rounded box + title in the top
@@ -270,7 +301,7 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
 
     const list = new SettingsList(
       items,
-      6,
+      7,
       getSettingsListTheme(),
       (id, newValue) => {
         if (id === "display" && isDisplayMode(newValue)) {
@@ -298,6 +329,10 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
           subtasks = newValue;
           deps.setSubtasksEnabled(newValue === "on", ctx);
           ctx.ui.notify(`checklist subtasks (preview): ${newValue}`, "info");
+        } else if (id === "meta" && (newValue === "on" || newValue === "off")) {
+          meta = newValue;
+          deps.setMetaEnabled(newValue === "on", ctx);
+          ctx.ui.notify(`checklist task meta (preview): ${newValue}`, "info");
         }
         repaintPreview(theme);
         repaintHint(theme);
@@ -344,7 +379,7 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
       if (lower.startsWith("settings ") || lower === "settings") {
         const rest = lower.startsWith("settings ") ? lower.slice("settings ".length) : "";
         const last = rest.split(/\s+/).pop() ?? "";
-        const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES, "subtasks", "no-subtasks"].filter((m) => m.startsWith(last));
+        const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES, "subtasks", "no-subtasks", "meta", "no-meta"].filter((m) => m.startsWith(last));
         const base = rest.includes(" ") ? rest.slice(0, rest.lastIndexOf(" ") + 1) : "";
         const values = candidates.map((m) => `settings ${base}${m}`);
         return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
@@ -398,6 +433,10 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
         if (action.subtasksEnabled !== undefined) {
           deps.setSubtasksEnabled(action.subtasksEnabled, ctx);
           applied.push(`Subtasks (preview): ${action.subtasksEnabled ? "on" : "off"}`);
+        }
+        if (action.metaEnabled !== undefined) {
+          deps.setMetaEnabled(action.metaEnabled, ctx);
+          applied.push(`Task meta (preview): ${action.metaEnabled ? "on" : "off"}`);
         }
         if (applied.length > 0) {
           if (action.usage) {

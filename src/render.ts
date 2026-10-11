@@ -382,11 +382,47 @@ export function renderChecklistResult(
 // /checklist overlay component (display-only; agent owns mutations)
 // ---------------------------------------------------------------------------
 
+/** Collapse control chars / newlines so a meta key or value stays on one dialog row. */
+function oneLine(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+}
+
+/** Aligned `key:  value` rows for one task/subtask's meta (dialog only).
+ * Keys are padded to the widest key in the block so the values line up;
+ * non-primitive values (hand-edited snapshots) are skipped. The caller's
+ * frame truncates anything wider than the dialog. */
+export function metaRows(meta: unknown, indent: string, theme: Theme): string[] {
+  if (typeof meta !== "object" || meta === null || Array.isArray(meta)) return [];
+  const entries: Array<[string, string]> = [];
+  for (const [key, value] of Object.entries(meta)) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      entries.push([`${oneLine(key)}:`, oneLine(String(value))]);
+    }
+  }
+  const keyWidth = entries.reduce((w, [k]) => Math.max(w, visibleWidth(k)), 0);
+  return entries.map(([k, v]) => `${indent}${theme.fg("dim", k)}${" ".repeat(keyWidth - visibleWidth(k))} ${theme.fg("muted", v)}`);
+}
+
+/** Share of the terminal height the /checklist dialog may use. pi-tui
+ * hard-slices an overlay's rendered lines to `floor(termRows * pct / 100)`
+ * (no scrolling), so the dialog must fit itself inside this budget. */
+export const DIALOG_MAX_HEIGHT_PERCENT = 70;
+
+export function dialogMaxRows(termRows: number): number {
+  return Math.max(1, Math.floor((termRows * DIALOG_MAX_HEIGHT_PERCENT) / 100));
+}
+
+/** Non-scrolling dialog lines: top + bottom border, count header + blank,
+ * blank + key hint. */
+const DIALOG_CHROME_ROWS = 6;
+
 export interface OverlayCallbacks {
   onClose: () => void;
   requestRender: () => void;
   /** Jump to the settings screen (the `s` shortcut). Optional so tests can omit it. */
   onSettings?: () => void;
+  /** Max rows the whole dialog may occupy (see dialogMaxRows). Undefined = unlimited. */
+  getMaxRows?: () => number | undefined;
 }
 
 export class ChecklistOverlay {
@@ -395,18 +431,24 @@ export class ChecklistOverlay {
   private theme: Theme;
   private cb: OverlayCallbacks;
   private opts: RenderOpts;
+  /** Task meta preview enabled: show meta rows under tasks/subtasks that have them. */
+  private showMeta: boolean;
   private selected = 0;
   private cachedWidth?: number;
+  private cachedMaxRows?: number;
   private cachedLines?: string[];
+  /** First visible flat row (task/subtask) when the list is taller than the dialog. */
+  private scrollTop = 0;
   /** Task ids whose subtask rows are currently expanded. Default: all collapsed. */
   private expanded = new Set<string>();
 
-  constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks, opts: RenderOpts = DEFAULT_RENDER_OPTS) {
+  constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks, opts: RenderOpts = DEFAULT_RENDER_OPTS, showMeta = false) {
     this.views = checklist ? sortViews(viewsOf(checklist)) : [];
     this.title = checklist?.title;
     this.theme = theme;
     this.cb = cb;
     this.opts = opts;
+    this.showMeta = showMeta;
   }
 
   /** One entry per visible row: a task, or a subtask under an expanded task. */
@@ -470,7 +512,8 @@ export class ChecklistOverlay {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
+    const maxRows = this.cb.getMaxRows?.();
+    if (this.cachedLines && this.cachedWidth === width && this.cachedMaxRows === maxRows) return this.cachedLines;
     const th = this.theme;
     const inner: string[] = [];
     if (this.views.length === 0) {
@@ -478,12 +521,15 @@ export class ChecklistOverlay {
     } else {
       const counts = this.views.length;
       const done = this.views.filter((v) => v.status === "done").length;
-      inner.push(`  ${th.fg("muted", `${done}/${counts} done`)}`);
+      const headerIdx = inner.push("") - 1; // count header, filled below (may show a scroll range)
       inner.push("");
       const rows = this.flatRows();
       // Keep the selection on an existing row after a collapse shrank the list.
       this.selected = Math.min(this.selected, Math.max(0, rows.length - 1));
-      rows.forEach((row, i) => {
+      // One block per flat row: the row itself plus its meta rows. Blocks
+      // are windowed below so the dialog never exceeds the overlay height.
+      const blocks: string[][] = rows.map((row, i) => {
+        const block: string[] = [];
         const v = row.view as TaskView;
         const isTask = row.kind === "task";
         const kind = statusKindOf(v);
@@ -503,12 +549,35 @@ export class ChecklistOverlay {
           // the task has no subtasks (keeps rows aligned).
           const subs = (v as TaskView).subtaskViews ?? [];
           const marker = subs.length === 0 ? "  " : this.expanded.has(v.id) ? "▾ " : "▸ ";
-          inner.push(`${cursor}${marker}${state}${glyph} ${id} ${title}${dep}`);
+          block.push(`${cursor}${marker}${state}${glyph} ${id} ${title}${dep}`);
         } else {
-          const s = v as SubtaskView;
-          inner.push(`${cursor}  ${state}${glyph} ${id} ${title}${dep}`);
+          block.push(`${cursor}  ${state}${glyph} ${id} ${title}${dep}`);
         }
+        // Meta rows are display-only (not part of flatRows), so selection and
+        // expand/collapse are unaffected. They sit under the id column.
+        if (this.showMeta && v.meta) {
+          const indent = " ".repeat(4 + visibleWidth(state) + visibleWidth(glyph) + 1);
+          block.push(...metaRows(v.meta, indent, th));
+        }
+        return block;
       });
+      const budget = maxRows === undefined ? Number.POSITIVE_INFINITY : Math.max(1, maxRows - DIALOG_CHROME_ROWS);
+      const { start, end } = this.visibleWindow(blocks, budget);
+      for (let i = start; i < end; i++) {
+        const block = blocks[i]!;
+        if (block.length <= budget) {
+          inner.push(...block);
+        } else if (budget === 1) {
+          inner.push(block[0]!);
+        } else {
+          // A single block taller than the whole budget (a task with many meta
+          // keys in a short terminal): keep the row line, clip the meta rows
+          // and say how many are hidden.
+          inner.push(...block.slice(0, budget - 1), `    ${th.fg("dim", `… +${block.length - (budget - 1)} more`)}`);
+        }
+      }
+      const range = start > 0 || end < blocks.length ? ` · rows ${start + 1}–${end} of ${blocks.length}` : "";
+      inner[headerIdx] = `  ${th.fg("muted", `${done}/${counts} done`)}${range ? th.fg("dim", range) : ""}`;
     }
     inner.push("");
     inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · →/l expand · ←/h collapse · s for settings · Esc/q to close")}`);
@@ -517,8 +586,36 @@ export class ChecklistOverlay {
     const titleText = `checklist${this.title ? ` — ${this.title}` : ""}`;
     const lines = frameDialog(titleText, inner, width, th);
     this.cachedWidth = width;
+    this.cachedMaxRows = maxRows;
     this.cachedLines = lines;
     return lines;
+  }
+
+  /** Pick the [start, end) flat-row window that fits `budget` lines and
+   * always contains the selected row; scrolls minimally (like a list). */
+  private visibleWindow(blocks: string[][], budget: number): { start: number; end: number } {
+    const heightOf = (from: number, to: number): number => {
+      let h = 0;
+      for (let i = from; i < to; i++) h += blocks[i]!.length;
+      return h;
+    };
+    let start = Math.min(this.scrollTop, this.selected);
+    while (start < this.selected && heightOf(start, this.selected + 1) > budget) start++;
+    let end = start;
+    let used = 0;
+    while (end < blocks.length && (end === start || used + blocks[end]!.length <= budget)) {
+      used += Math.min(blocks[end]!.length, budget);
+      end++;
+    }
+    // Empty space at the bottom (e.g. after a collapse): pull earlier rows back in.
+    if (end === blocks.length) {
+      while (start > 0 && used + blocks[start - 1]!.length <= budget) {
+        start--;
+        used += blocks[start]!.length;
+      }
+    }
+    this.scrollTop = start;
+    return { start, end };
   }
 
   invalidate(): void {

@@ -4,7 +4,7 @@
  *
  * No pi / TUI imports — testable with plain node.
  */
-import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Subtask, type SubtaskView, type Task, type TaskStatus, type IconSet, type StatusStyle, type TaskView, type UpdateTaskInput, type UsageMode } from "./types.js";
+import { type Checklist, type ChecklistSnapshot, type CreateInput, type DisplayMode, type Subtask, type SubtaskView, type Task, type TaskStatus, type IconSet, type StatusStyle, type TaskMeta, type TaskView, type UpdateTaskInput, type UsageMode } from "./types.js";
 export declare const ID_PATTERN: RegExp;
 export declare const TASK_STATUSES: readonly TaskStatus[];
 /** Session checklists stay deliberately small and scannable. */
@@ -14,6 +14,22 @@ export declare const MAX_CHECKLIST_TASKS = 10;
 export declare const MAX_SUBTASKS_PER_TASK = 3;
 /** Error thrown when a subtask payload arrives while the preview is off. */
 export declare function subtasksPreviewError(): Error;
+/** Meta stays tiny on purpose: it is prompt/dialog-visible, not a database. */
+export declare const MAX_META_KEYS = 10;
+export declare const MAX_META_KEY_LENGTH = 40;
+export declare const MAX_META_STRING_LENGTH = 200;
+/** Error thrown when a non-empty `meta` payload arrives while the preview is off. */
+export declare function metaPreviewError(): Error;
+/** Merge a meta patch into `existing`: new keys set, existing overwritten,
+ * `null` deletes. Pure — returns a fresh object (or `undefined` when empty)
+ * plus human-readable change parts (`k=v` / `-k`). Deleting an absent key is
+ * a no-op, so create (existing = undefined) simply skips nulls. */
+export declare function mergeMeta(existing: TaskMeta | undefined, raw: unknown, label: string): {
+    meta: TaskMeta | undefined;
+    parts: string[];
+};
+/** Compact `{k="v", n=1}` text for LLM-facing output. */
+export declare function formatMeta(meta: TaskMeta | undefined): string;
 export declare function normalizeTitleKey(title: string): string;
 export declare function allocId(title: string, used: Set<string>): string;
 /** Validate a caller-supplied id; returns the lowercased id. Throws on invalid. */
@@ -34,6 +50,9 @@ export declare function resolveUsage(snapshot: ChecklistSnapshot): UsageMode;
 /** Resolve whether the subtasks preview is enabled. Default `false`.
  * Precedence is handled by the caller (global prefs file > snapshot). */
 export declare function resolveSubtasksEnabled(snapshot: ChecklistSnapshot): boolean;
+/** Resolve whether the task meta preview is enabled. Default `false`.
+ * Precedence is handled by the caller (global prefs file > snapshot). */
+export declare function resolveMetaEnabled(snapshot: ChecklistSnapshot): boolean;
 export declare function toView(task: Task, byId: Map<string, Task>): TaskView;
 /** Effective subtask view: `blockedBy` is sibling deps not done PLUS the
  * parent's own `blockedBy` when the parent is blocked (primitive S3 —
@@ -54,6 +73,7 @@ export interface CreateResult {
 }
 export declare function createOrAppend(current: Checklist | null, input: CreateInput, now?: number, opts?: {
     subtasksEnabled?: boolean;
+    metaEnabled?: boolean;
 }): CreateResult;
 export interface UpdateResult {
     checklist: Checklist;
@@ -61,6 +81,7 @@ export interface UpdateResult {
 }
 export declare function applyUpdates(current: Checklist | null, updates: UpdateTaskInput[], now?: number, opts?: {
     subtasksEnabled?: boolean;
+    metaEnabled?: boolean;
 }): UpdateResult;
 interface BranchLike {
     type?: unknown;
@@ -80,7 +101,7 @@ export declare function countsOf(checklist: Checklist): {
     ready: number;
     blocked: number;
 };
-export declare function formatTaskLine(v: TaskView): string;
+export declare function formatTaskLine(v: TaskView, showMeta?: boolean): string;
 /** Compact snippet re-injected on before_agent_start so compaction can't hide the list. */
 export declare function buildInjectSnippet(checklist: Checklist): string;
 export {};

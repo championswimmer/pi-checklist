@@ -6,6 +6,8 @@ export interface GlobalPrefs {
     usage?: UsageMode;
     /** Subtasks preview flag. Absent = off. */
     subtasksEnabled?: boolean;
+    /** Task meta preview flag. Absent = off. */
+    metaEnabled?: boolean;
 }
 /** Resolve the pi agent dir: `PI_CODING_AGENT_DIR` or `~/.pi/agent`. */
 export declare function resolveAgentDir(): string;

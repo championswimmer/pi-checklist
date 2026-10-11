@@ -72,11 +72,23 @@ export declare function renderChecklistResult(result: {
     }>;
     details?: unknown;
 }, expanded: boolean, theme: Theme): Text;
+/** Aligned `key:  value` rows for one task/subtask's meta (dialog only).
+ * Keys are padded to the widest key in the block so the values line up;
+ * non-primitive values (hand-edited snapshots) are skipped. The caller's
+ * frame truncates anything wider than the dialog. */
+export declare function metaRows(meta: unknown, indent: string, theme: Theme): string[];
+/** Share of the terminal height the /checklist dialog may use. pi-tui
+ * hard-slices an overlay's rendered lines to `floor(termRows * pct / 100)`
+ * (no scrolling), so the dialog must fit itself inside this budget. */
+export declare const DIALOG_MAX_HEIGHT_PERCENT = 70;
+export declare function dialogMaxRows(termRows: number): number;
 export interface OverlayCallbacks {
     onClose: () => void;
     requestRender: () => void;
     /** Jump to the settings screen (the `s` shortcut). Optional so tests can omit it. */
     onSettings?: () => void;
+    /** Max rows the whole dialog may occupy (see dialogMaxRows). Undefined = unlimited. */
+    getMaxRows?: () => number | undefined;
 }
 export declare class ChecklistOverlay {
     private views;
@@ -84,16 +96,24 @@ export declare class ChecklistOverlay {
     private theme;
     private cb;
     private opts;
+    /** Task meta preview enabled: show meta rows under tasks/subtasks that have them. */
+    private showMeta;
     private selected;
     private cachedWidth?;
+    private cachedMaxRows?;
     private cachedLines?;
+    /** First visible flat row (task/subtask) when the list is taller than the dialog. */
+    private scrollTop;
     /** Task ids whose subtask rows are currently expanded. Default: all collapsed. */
     private expanded;
-    constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks, opts?: RenderOpts);
+    constructor(checklist: Checklist | null, theme: Theme, cb: OverlayCallbacks, opts?: RenderOpts, showMeta?: boolean);
     /** One entry per visible row: a task, or a subtask under an expanded task. */
     private flatRows;
     handleInput(data: string): void;
     render(width: number): string[];
+    /** Pick the [start, end) flat-row window that fits `budget` lines and
+     * always contains the selected row; scrolls minimally (like a list). */
+    private visibleWindow;
     invalidate(): void;
 }
 export {};

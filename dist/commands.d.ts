@@ -17,6 +17,7 @@ export type ChecklistAction = {
     iconSet?: IconSet;
     usage?: UsageMode;
     subtasksEnabled?: boolean;
+    metaEnabled?: boolean;
 } | {
     name: "help";
 };
@@ -30,8 +31,11 @@ export declare function normalizeIconSet(raw: string): IconSet | undefined;
 export declare function normalizeUsageMode(raw: string): UsageMode | undefined;
 /** Normalize a user-typed subtasks word to a boolean (preview toggle). */
 export declare function normalizeSubtasksSetting(raw: string): boolean | undefined;
+/** Normalize a user-typed meta word to a boolean (preview toggle). Bare
+ * on/off stay with subtasks, so meta needs its own words. */
+export declare function normalizeMetaSetting(raw: string): boolean | undefined;
 export declare function parseChecklistArgs(raw: string): ChecklistAction;
-export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
+export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 export interface ChecklistCommandDeps {
     getDisplayMode: () => DisplayMode;
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
@@ -43,6 +47,8 @@ export interface ChecklistCommandDeps {
     setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void;
     getSubtasksEnabled: () => boolean;
     setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
+    getMetaEnabled: () => boolean;
+    setMetaEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
     getRenderOpts: () => RenderOpts;
     clear: (ctx: ExtensionCommandContext) => void;
     getChecklist: () => import("./types.js").Checklist | null;

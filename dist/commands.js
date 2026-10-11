@@ -1,6 +1,6 @@
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { Container, SettingsList, Text } from "@earendil-works/pi-tui";
-import { DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, frameDialog, previewLines, } from "./render.js";
+import { DIALOG_MAX_HEIGHT_PERCENT, DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, dialogMaxRows, frameDialog, previewLines, } from "./render.js";
 import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, isDisplayMode, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
 export function normalizeDisplayMode(raw) {
@@ -54,6 +54,16 @@ export function normalizeSubtasksSetting(raw) {
         return false;
     return undefined;
 }
+/** Normalize a user-typed meta word to a boolean (preview toggle). Bare
+ * on/off stay with subtasks, so meta needs its own words. */
+export function normalizeMetaSetting(raw) {
+    const word = raw.trim().toLowerCase().replace(/_/g, "-");
+    if (word === "meta" || word === "task-meta")
+        return true;
+    if (word === "no-meta" || word === "nometa" || word === "no-task-meta")
+        return false;
+    return undefined;
+}
 export function parseChecklistArgs(raw) {
     const parts = raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const head = parts[0] ?? "";
@@ -74,6 +84,7 @@ export function parseChecklistArgs(raw) {
         let iconSet;
         let usage;
         let subtasksEnabled;
+        let metaEnabled;
         for (const token of tokens) {
             const m = normalizeDisplayMode(token);
             if (m && displayMode === undefined) {
@@ -100,16 +111,21 @@ export function parseChecklistArgs(raw) {
                 subtasksEnabled = st;
                 continue;
             }
+            const me = normalizeMetaSetting(token);
+            if (me !== undefined && metaEnabled === undefined) {
+                metaEnabled = me;
+                continue;
+            }
             return { name: "help" };
         }
-        if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined && subtasksEnabled === undefined) {
+        if (displayMode === undefined && statusStyle === undefined && iconSet === undefined && usage === undefined && subtasksEnabled === undefined && metaEnabled === undefined) {
             return { name: "help" };
         }
-        return { name: "settings", displayMode, statusStyle, iconSet, usage, subtasksEnabled };
+        return { name: "settings", displayMode, statusStyle, iconSet, usage, subtasksEnabled, metaEnabled };
     }
     return { name: "help" };
 }
-export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks]]";
+export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(ctx, deps) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
@@ -143,8 +159,11 @@ async function openChecklistDialog(ctx, deps) {
                 done();
             },
             requestRender: () => tui.requestRender(),
-        }, opts);
-    }, { overlay: true, overlayOptions: { width: "70%", maxHeight: "70%", anchor: "center" } });
+            // pi-tui slices overlay lines to maxHeight with no scrolling, so the
+            // dialog windows its own rows against the live terminal height.
+            getMaxRows: () => dialogMaxRows(tui.terminal.rows),
+        }, opts, deps.getMetaEnabled());
+    }, { overlay: true, overlayOptions: { width: "70%", maxHeight: `${DIALOG_MAX_HEIGHT_PERCENT}%`, anchor: "center" } });
     if (goSettings) {
         await openSettingsScreen(ctx, deps);
     }
@@ -157,6 +176,7 @@ async function openSettingsScreen(ctx, deps) {
         let icons = deps.getIconSet();
         let usage = deps.getUsage();
         let subtasks = deps.getSubtasksEnabled() ? "on" : "off";
+        let meta = deps.getMetaEnabled() ? "on" : "off";
         const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
         const previewBody = new Text("", 1, 0);
         const repaintPreview = (th) => {
@@ -206,12 +226,19 @@ async function openSettingsScreen(ctx, deps) {
                 values: ["off", "on"],
                 description: "preview: nested subtasks inside tasks (at most 3 per task, sibling-only dependsOn)",
             },
+            {
+                id: "meta",
+                label: "Task meta (preview)",
+                currentValue: meta,
+                values: ["off", "on"],
+                description: "preview: key/value meta on tasks (set on create, merge on update, null deletes); shown in the /checklist dialog",
+            },
         ];
         // Dialog chrome is drawn by frameDialog (rounded box + title in the top
         // border) in render() below — pi-tui has no bordered-box component, so
         // dialogs draw their own border.
         const container = new Container();
-        const list = new SettingsList(items, 6, getSettingsListTheme(), (id, newValue) => {
+        const list = new SettingsList(items, 7, getSettingsListTheme(), (id, newValue) => {
             if (id === "display" && isDisplayMode(newValue)) {
                 display = newValue;
                 deps.setDisplayMode(newValue, ctx);
@@ -238,6 +265,11 @@ async function openSettingsScreen(ctx, deps) {
                 subtasks = newValue;
                 deps.setSubtasksEnabled(newValue === "on", ctx);
                 ctx.ui.notify(`checklist subtasks (preview): ${newValue}`, "info");
+            }
+            else if (id === "meta" && (newValue === "on" || newValue === "off")) {
+                meta = newValue;
+                deps.setMetaEnabled(newValue === "on", ctx);
+                ctx.ui.notify(`checklist task meta (preview): ${newValue}`, "info");
             }
             repaintPreview(theme);
             repaintHint(theme);
@@ -279,7 +311,7 @@ export function registerChecklistCommand(pi, deps) {
             if (lower.startsWith("settings ") || lower === "settings") {
                 const rest = lower.startsWith("settings ") ? lower.slice("settings ".length) : "";
                 const last = rest.split(/\s+/).pop() ?? "";
-                const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES, "subtasks", "no-subtasks"].filter((m) => m.startsWith(last));
+                const candidates = [...DISPLAY_MODES, ...STATUS_STYLES, ...ICON_SETS, ...USAGE_MODES, "subtasks", "no-subtasks", "meta", "no-meta"].filter((m) => m.startsWith(last));
                 const base = rest.includes(" ") ? rest.slice(0, rest.lastIndexOf(" ") + 1) : "";
                 const values = candidates.map((m) => `settings ${base}${m}`);
                 return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
@@ -334,6 +366,10 @@ export function registerChecklistCommand(pi, deps) {
                 if (action.subtasksEnabled !== undefined) {
                     deps.setSubtasksEnabled(action.subtasksEnabled, ctx);
                     applied.push(`Subtasks (preview): ${action.subtasksEnabled ? "on" : "off"}`);
+                }
+                if (action.metaEnabled !== undefined) {
+                    deps.setMetaEnabled(action.metaEnabled, ctx);
+                    applied.push(`Task meta (preview): ${action.metaEnabled ? "on" : "off"}`);
                 }
                 if (applied.length > 0) {
                     if (action.usage) {

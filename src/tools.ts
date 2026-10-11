@@ -1,7 +1,7 @@
 /** Tool schemas, guidelines, and execute logic for pi-checklist. */
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type, type TSchema } from "typebox";
-import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, applyUpdates, countsOf, createOrAppend, formatTaskLine, sortViews, viewsOf } from "./store.js";
+import { MAX_CHECKLIST_TASKS, MAX_META_KEYS, MAX_META_KEY_LENGTH, MAX_META_STRING_LENGTH, MAX_SUBTASKS_PER_TASK, applyUpdates, countsOf, createOrAppend, formatTaskLine, sortViews, viewsOf } from "./store.js";
 import type {
   Checklist,
   ChecklistSnapshot,
@@ -24,11 +24,28 @@ const DependsOn = Type.Optional(
   }),
 );
 
+const META_VALUE_DESC = `string (≤${MAX_META_STRING_LENGTH} chars), number or boolean`;
+
+/** Create-time meta: plain k:v facts. */
+const MetaCreate = Type.Optional(
+  Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()]), {
+    description: `Preview (enable with /checklist settings meta): flat key → ${META_VALUE_DESC}; at most ${MAX_META_KEYS} keys, keys ≤${MAX_META_KEY_LENGTH} chars. Example: { "agent": "impl-auth", "pr": 42 }`,
+  }),
+);
+
+/** Update-time meta: merged into the existing meta; null deletes a key. */
+const MetaUpdate = Type.Optional(
+  Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean(), Type.Null()]), {
+    description: `Preview (enable with /checklist settings meta): MERGED into the existing meta — listed keys are set (${META_VALUE_DESC}), unlisted keys stay, and "key": null deletes that key`,
+  }),
+);
+
 const SubtaskCreate = Type.Object({
   id: Type.Optional(Type.String({ description: 'Optional explicit 3-char id (e.g. "k7q") for same-batch DAGs' })),
   title: Type.String({ description: "Short subtask title (required)" }),
   notes: Type.Optional(Type.String({ description: "Optional extra context" })),
   dependsOn: DependsOn,
+  meta: MetaCreate,
 });
 
 const SubtaskUpdate = Type.Object({
@@ -41,6 +58,7 @@ const SubtaskUpdate = Type.Object({
     }),
   ),
   dependsOn: DependsOn,
+  meta: MetaUpdate,
 });
 
 export const ChecklistCreateParams: TSchema = Type.Object({
@@ -57,6 +75,7 @@ export const ChecklistCreateParams: TSchema = Type.Object({
       subtasks: Type.Optional(Type.Array(SubtaskCreate, {
         description: `Preview (enable with /checklist settings subtasks): nested subtasks, at most ${MAX_SUBTASKS_PER_TASK} per task, depending only on siblings in the same parent`,
       })),
+      meta: MetaCreate,
     }),
     { description: `Tasks to install (replace) or add (append). A checklist holds at most ${MAX_CHECKLIST_TASKS} tasks total at a time. An empty array with mode replace clears the checklist, ready for the next set of tasks.` },
   ),
@@ -86,6 +105,7 @@ export const ChecklistUpdateParams: TSchema = Type.Object({
       subtasks: Type.Optional(Type.Array(SubtaskUpdate, {
         description: "Preview: patch subtasks (id present) or add new ones (id omitted, title required); finish parent + subtasks together in ONE entry",
       })),
+      meta: MetaUpdate,
     }),
     { description: "All-or-nothing batch of updates" },
   ),
@@ -101,6 +121,7 @@ export const CREATE_GUIDELINES = [
   "checklist_create task ids are exactly 3 lowercase alphanumeric chars: omit id unless you need a same-batch DAG, then pass explicit 3-char ids. Always copy the returned ids; never invent them.",
   `A checklist holds at most ${MAX_CHECKLIST_TASKS} tasks total at a time; keep it small, split overflow into a follow-up checklist.`,
   `Subtasks are a preview feature (only when enabled via /checklist settings): at most ${MAX_SUBTASKS_PER_TASK} per task, sibling-only dependsOn, born planned.`,
+  `Task meta is a preview feature (only when enabled via /checklist settings meta): checklist_create accepts an optional flat meta object (string/number/boolean values, ≤${MAX_META_KEYS} keys) on tasks and subtasks.`,
 ];
 
 export const READ_SNIPPET = "Read the session task checklist.";
@@ -114,6 +135,7 @@ export const UPDATE_GUIDELINES = [
   "checklist_update cannot start a task whose blockedBy is non-empty: finish every dependsOn task first. Keep at most one ongoing task (or a tight parallel set).",
   "checklist_update transitions: planned → ongoing/done/cancelled, ongoing → done/cancelled/planned, cancelled → planned. done is terminal and frozen.",
   "Subtasks (preview, when enabled): a parent cannot finish with open subtasks; starting a subtask pulls a planned parent to ongoing; subtasks inherit the parent's block.",
+  "Task meta (preview, when enabled): checklist_update meta is merged into the existing meta; set a key to null to delete it. Done tasks are frozen, meta included.",
 ];
 
 // ---------------------------------------------------------------------------
@@ -134,6 +156,7 @@ function snapshotOf(
   statusStyle?: StatusStyle,
   iconSet?: IconSet,
   subtasksEnabled?: boolean,
+  metaEnabled?: boolean,
 ): ChecklistSnapshot {
   const snap: ChecklistSnapshot = { v: 1, checklist };
   if (widgetVisible !== undefined) snap.widgetVisible = widgetVisible;
@@ -141,6 +164,7 @@ function snapshotOf(
   if (statusStyle !== undefined) snap.statusStyle = statusStyle;
   if (iconSet !== undefined) snap.iconSet = iconSet;
   if (subtasksEnabled !== undefined) snap.subtasksEnabled = subtasksEnabled;
+  if (metaEnabled !== undefined) snap.metaEnabled = metaEnabled;
   return snap;
 }
 
@@ -152,20 +176,21 @@ export function executeCreate(
   statusStyle?: StatusStyle,
   iconSet?: IconSet,
   subtasksEnabled?: boolean,
+  metaEnabled?: boolean,
 ): Mutation {
   const input = raw as CreateInput;
   const { checklist, assigned } = createOrAppend(current, {
     title: input.title,
     mode: input.mode,
     tasks: (input.tasks ?? []) as CreateInput["tasks"],
-  }, Date.now(), { subtasksEnabled });
+  }, Date.now(), { subtasksEnabled, metaEnabled });
   const c = countsOf(checklist);
   const lines = assigned.map((a) => `  ${a.id} "${a.title}"`);
   const text =
     assigned.length === 0
       ? `checklist cleared (0/${c.total} done)`
       : `checklist: ${assigned.length} task(s) installed (${c.done}/${c.total} done)\n${lines.join("\n")}`;
-  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet, subtasksEnabled), changed: true };
+  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet, subtasksEnabled, metaEnabled), changed: true };
 }
 
 export function executeRead(
@@ -174,10 +199,11 @@ export function executeRead(
   statusStyle?: StatusStyle,
   iconSet?: IconSet,
   subtasksEnabled?: boolean,
+  metaEnabled?: boolean,
 ): Mutation {
   const input = (raw ?? {}) as ReadInput;
   if (!current || current.tasks.length === 0) {
-    return { text: "checklist is empty: use checklist_create first", snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet, subtasksEnabled), changed: false };
+    return { text: "checklist is empty: use checklist_create first", snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet, subtasksEnabled, metaEnabled), changed: false };
   }
   const status = input.status as TaskStatus | undefined;
   const includeDone = input.includeDone ?? true;
@@ -186,8 +212,8 @@ export function executeRead(
   else if (!includeDone) views = views.filter((v) => v.status !== "done");
   const c = countsOf(current);
   const header = `checklist${current.title ? ` "${current.title}"` : ""} (${c.done}/${c.total} done, ${c.ongoing} ongoing, ${c.ready} ready, ${c.blocked} blocked)`;
-  const body = views.length > 0 ? `\n${views.map(formatTaskLine).join("\n")}` : "\n(no tasks match)";
-  return { text: header + body, snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet, subtasksEnabled), changed: false };
+  const body = views.length > 0 ? `\n${views.map((v) => formatTaskLine(v, metaEnabled === true)).join("\n")}` : "\n(no tasks match)";
+  return { text: header + body, snapshot: snapshotOf(current, undefined, undefined, statusStyle, iconSet, subtasksEnabled, metaEnabled), changed: false };
 }
 
 export function executeUpdate(
@@ -198,10 +224,11 @@ export function executeUpdate(
   statusStyle?: StatusStyle,
   iconSet?: IconSet,
   subtasksEnabled?: boolean,
+  metaEnabled?: boolean,
 ): Mutation {
   const input = raw as { updates: UpdateTaskInput[] };
-  const { checklist, changes } = applyUpdates(current, input.updates ?? [], Date.now(), { subtasksEnabled });
+  const { checklist, changes } = applyUpdates(current, input.updates ?? [], Date.now(), { subtasksEnabled, metaEnabled });
   const c = countsOf(checklist);
   const text = `checklist (${c.done}/${c.total} done):\n${changes.map((l) => `  ${l}`).join("\n")}`;
-  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet, subtasksEnabled), changed: true };
+  return { text, snapshot: snapshotOf(checklist, widgetVisible, displayMode, statusStyle, iconSet, subtasksEnabled, metaEnabled), changed: true };
 }

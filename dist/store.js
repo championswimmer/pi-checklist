@@ -19,6 +19,84 @@ export function subtasksPreviewError() {
     return new Error("subtasks are a preview feature (disabled): enable them with /checklist settings subtasks before adding or editing subtasks");
 }
 // ---------------------------------------------------------------------------
+// Task meta (preview): flat key → string | number | boolean
+// ---------------------------------------------------------------------------
+/** Meta stays tiny on purpose: it is prompt/dialog-visible, not a database. */
+export const MAX_META_KEYS = 10;
+export const MAX_META_KEY_LENGTH = 40;
+export const MAX_META_STRING_LENGTH = 200;
+/** Error thrown when a non-empty `meta` payload arrives while the preview is off. */
+export function metaPreviewError() {
+    return new Error("task meta is a preview feature (disabled): enable it with /checklist settings meta before setting meta");
+}
+function isPlainObject(raw) {
+    return typeof raw === "object" && raw !== null && !Array.isArray(raw);
+}
+/** Reject a meta payload while the preview is off (`undefined` and `{}` are no-ops). */
+function assertMetaAllowed(raw, enabled) {
+    if (raw === undefined || enabled)
+        return;
+    if (isPlainObject(raw) && Object.keys(raw).length === 0)
+        return;
+    throw metaPreviewError();
+}
+function normalizeMetaKey(rawKey, label) {
+    const key = rawKey.trim();
+    if (key.length === 0 || key.length > MAX_META_KEY_LENGTH || key === "__proto__") {
+        throw new Error(`${label} meta key ${JSON.stringify(rawKey)} is invalid: use 1–${MAX_META_KEY_LENGTH} chars (not "__proto__")`);
+    }
+    return key;
+}
+function checkMetaValue(value, key, label) {
+    if (typeof value === "string") {
+        if (value.length > MAX_META_STRING_LENGTH) {
+            throw new Error(`${label} meta "${key}" is too long: string values are limited to ${MAX_META_STRING_LENGTH} chars`);
+        }
+        return value;
+    }
+    if (typeof value === "number" && Number.isFinite(value))
+        return value;
+    if (typeof value === "boolean")
+        return value;
+    throw new Error(`${label} meta "${key}" must be a string, number or boolean (null deletes the key on update); got ${JSON.stringify(value) ?? String(value)}`);
+}
+/** Merge a meta patch into `existing`: new keys set, existing overwritten,
+ * `null` deletes. Pure — returns a fresh object (or `undefined` when empty)
+ * plus human-readable change parts (`k=v` / `-k`). Deleting an absent key is
+ * a no-op, so create (existing = undefined) simply skips nulls. */
+export function mergeMeta(existing, raw, label) {
+    if (!isPlainObject(raw)) {
+        throw new Error(`${label} meta must be an object of key/value pairs (string, number or boolean values; null deletes a key)`);
+    }
+    const out = { ...(existing ?? {}) };
+    const parts = [];
+    for (const [rawKey, value] of Object.entries(raw)) {
+        const key = normalizeMetaKey(rawKey, label);
+        if (value === null) {
+            if (Object.prototype.hasOwnProperty.call(out, key)) {
+                delete out[key];
+                parts.push(`-${key}`);
+            }
+            continue;
+        }
+        out[key] = checkMetaValue(value, key, label);
+        parts.push(`${key}=${JSON.stringify(out[key])}`);
+    }
+    if (Object.keys(out).length > MAX_META_KEYS) {
+        throw new Error(`${label} meta supports at most ${MAX_META_KEYS} keys: delete some (key: null) first`);
+    }
+    return { meta: Object.keys(out).length > 0 ? out : undefined, parts };
+}
+/** Compact `{k="v", n=1}` text for LLM-facing output. */
+export function formatMeta(meta) {
+    if (!meta)
+        return "";
+    const entries = Object.entries(meta);
+    if (entries.length === 0)
+        return "";
+    return `{${entries.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ")}}`;
+}
+// ---------------------------------------------------------------------------
 // Id allocation (FNV-1a of normalized title, base36, salt on collision)
 // ---------------------------------------------------------------------------
 function fnv1a(s) {
@@ -130,6 +208,11 @@ export function resolveUsage(snapshot) {
 export function resolveSubtasksEnabled(snapshot) {
     return snapshot.subtasksEnabled === true;
 }
+/** Resolve whether the task meta preview is enabled. Default `false`.
+ * Precedence is handled by the caller (global prefs file > snapshot). */
+export function resolveMetaEnabled(snapshot) {
+    return snapshot.metaEnabled === true;
+}
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
@@ -140,7 +223,8 @@ export function toView(task, byId) {
     return {
         ...task,
         dependsOn: [...task.dependsOn],
-        subtasks: subs.map((s) => ({ ...s, dependsOn: [...s.dependsOn] })),
+        subtasks: subs.map((s) => ({ ...s, dependsOn: [...s.dependsOn], ...(s.meta ? { meta: { ...s.meta } } : {}) })),
+        ...(task.meta ? { meta: { ...task.meta } } : {}),
         ready: task.status === "planned" && blockedBy.length === 0,
         blockedBy,
         blocked: blockedBy.length > 0,
@@ -156,6 +240,7 @@ export function toSubtaskView(sub, sibById, parentBlockedBy) {
     return {
         ...sub,
         dependsOn: [...sub.dependsOn],
+        ...(sub.meta ? { meta: { ...sub.meta } } : {}),
         ready: sub.status === "planned" && blockedBy.length === 0,
         blockedBy,
         blocked: blockedBy.length > 0,
@@ -209,7 +294,7 @@ export function hasCycle(graph) {
 /** Build + validate a parent's subtasks (create path). Ids are allocated
  * from the shared checklist-wide `used` set (unique across tasks AND
  * subtasks); `dependsOn` must stay inside the sibling set. */
-function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, now) {
+function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, metaEnabled, now) {
     if (raw === undefined)
         return [];
     if (!Array.isArray(raw)) {
@@ -264,6 +349,12 @@ function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, now) {
         const built = { id, title, status: "planned", dependsOn, createdAt: now, updatedAt: now };
         if (notes !== undefined)
             built.notes = notes;
+        assertMetaAllowed(sub.meta, metaEnabled);
+        if (sub.meta !== undefined) {
+            const { meta } = mergeMeta(undefined, sub.meta, `subtask ${id}`);
+            if (meta)
+                built.meta = meta;
+        }
         return built;
     });
     assertAcyclic(new Map(fresh.map((s) => [s.id, [...s.dependsOn]])), `subtask cycle in task ${parentId} detected: dependsOn would create a loop`);
@@ -339,6 +430,7 @@ export function createOrAppend(current, input, now = Date.now(), opts) {
     // taskIdSet stays task-only: tasks may not depend on subtasks.
     const taskIdSet = new Set(used);
     const subtasksEnabled = opts?.subtasksEnabled === true;
+    const metaEnabled = opts?.metaEnabled === true;
     const fresh = input.tasks.map((t, i) => {
         const task = t;
         const title = requireTitle(task.title, i);
@@ -359,10 +451,16 @@ export function createOrAppend(current, input, now = Date.now(), opts) {
                 throw new Error(`task ${id} notes must be a string`);
             notes = task.notes;
         }
-        const subs = buildSubtasks(id, task.subtasks, used, taskIdSet, subtasksEnabled, now);
+        const subs = buildSubtasks(id, task.subtasks, used, taskIdSet, subtasksEnabled, metaEnabled, now);
         const built = { id, title, status: "planned", dependsOn, createdAt: now, updatedAt: now };
         if (notes !== undefined)
             built.notes = notes;
+        assertMetaAllowed(task.meta, metaEnabled);
+        if (task.meta !== undefined) {
+            const { meta } = mergeMeta(undefined, task.meta, `task ${id}`);
+            if (meta)
+                built.meta = meta;
+        }
         if (subs.length > 0)
             built.subtasks = subs;
         return built;
@@ -397,6 +495,9 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
         dependsOn: [...t.dependsOn],
         ...(t.subtasks ? { subtasks: t.subtasks.map((s) => ({ ...s, dependsOn: [...s.dependsOn] })) } : {}),
     }));
+    // meta objects are replaced (never mutated in place) by mergeMeta, so the
+    // shallow copies above are safe to stage against.
+    const metaEnabled = opts?.metaEnabled === true;
     const byId = new Map(next.map((t) => [t.id, t]));
     const changes = [];
     // Normalize inputs first (ids lowercased, dependsOn coerced) so validation
@@ -423,9 +524,10 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
     const statusMoves = [];
     for (const n of normalized) {
         const { task, update, index } = n;
+        assertMetaAllowed(update.meta, metaEnabled);
         if (task.status === "done") {
             const touchesStatus = update.status !== undefined && update.status !== "done";
-            if (touchesStatus || update.title !== undefined || update.notes !== undefined || update.dependsOn !== undefined) {
+            if (touchesStatus || update.title !== undefined || update.notes !== undefined || update.dependsOn !== undefined || update.meta !== undefined) {
                 throw new Error(`task ${n.id} is done (frozen in v1): cannot edit; create a new task instead (update at index ${index})`);
             }
             continue;
@@ -444,6 +546,15 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
                 throw new Error(`task ${n.id} notes must be a string`);
             task.notes = update.notes;
             changes.push(`${n.id} notes updated`);
+        }
+        if (update.meta !== undefined) {
+            const { meta, parts } = mergeMeta(task.meta, update.meta, `task ${n.id}`);
+            if (meta)
+                task.meta = meta;
+            else
+                delete task.meta;
+            if (parts.length > 0)
+                changes.push(`${n.id} meta ${parts.join(", ")}`);
         }
         if (update.dependsOn !== undefined) {
             const deps = coerceDependsOn(update.dependsOn);
@@ -571,15 +682,22 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
             const built = { id: sid, title, status: "planned", dependsOn: deps, createdAt: now, updatedAt: now };
             if (notes !== undefined)
                 built.notes = notes;
+            assertMetaAllowed(a.entry.meta, metaEnabled);
+            if (a.entry.meta !== undefined) {
+                const { meta } = mergeMeta(undefined, a.entry.meta, `subtask ${sid}`);
+                if (meta)
+                    built.meta = meta;
+            }
             changes.push(`${sid} (subtask of ${n.id}) added "${title}"`);
             return built;
         });
         parent.subtasks = [...existing, ...builtAdds];
         for (const { entry, sid } of patchEntries) {
             const sub = bySubId.get(sid);
+            assertMetaAllowed(entry.meta, metaEnabled);
             if (sub.status === "done") {
                 const touchesStatus = entry.status !== undefined && entry.status !== "done";
-                if (touchesStatus || entry.title !== undefined || entry.notes !== undefined || entry.dependsOn !== undefined) {
+                if (touchesStatus || entry.title !== undefined || entry.notes !== undefined || entry.dependsOn !== undefined || entry.meta !== undefined) {
                     throw new Error(`subtask ${sid} (task ${n.id}) is done (frozen in v1): cannot edit; create a new task instead`);
                 }
                 continue;
@@ -598,6 +716,15 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
                     throw new Error(`subtask ${sid} (task ${n.id}) notes must be a string`);
                 sub.notes = entry.notes;
                 changes.push(`${sid} (subtask of ${n.id}) notes updated`);
+            }
+            if (entry.meta !== undefined) {
+                const { meta, parts } = mergeMeta(sub.meta, entry.meta, `subtask ${sid}`);
+                if (meta)
+                    sub.meta = meta;
+                else
+                    delete sub.meta;
+                if (parts.length > 0)
+                    changes.push(`${sid} (subtask of ${n.id}) meta ${parts.join(", ")}`);
             }
             if (entry.dependsOn !== undefined) {
                 const deps = coerceDependsOn(entry.dependsOn);
@@ -738,15 +865,19 @@ export function countsOf(checklist) {
         blocked: views.filter((v) => v.status === "planned" && v.blocked).length,
     };
 }
-export function formatTaskLine(v) {
+export function formatTaskLine(v, showMeta = false) {
     const dep = v.blockedBy.length > 0 ? ` blocked ← ${v.blockedBy.join(", ")}` : "";
     const ready = v.ready ? " ready" : "";
     const notes = v.notes ? ` — ${v.notes}` : "";
-    const head = `${v.id} [${v.status}]${ready}${dep} "${v.title}"${notes}`;
+    const metaText = showMeta ? formatMeta(v.meta) : "";
+    const meta = metaText ? ` ${metaText}` : "";
+    const head = `${v.id} [${v.status}]${ready}${dep} "${v.title}"${notes}${meta}`;
     const subs = (v.subtaskViews ?? []).map((s) => {
         const sdep = s.blockedBy.length > 0 ? ` blocked ← ${s.blockedBy.join(", ")}` : "";
         const sready = s.ready ? " ready" : "";
-        return `\n  ↳ ${s.id} [${s.status}]${sready}${sdep} "${s.title}"`;
+        const sMetaText = showMeta ? formatMeta(s.meta) : "";
+        const smeta = sMetaText ? ` ${sMetaText}` : "";
+        return `\n  ↳ ${s.id} [${s.status}]${sready}${sdep} "${s.title}"${smeta}`;
     });
     return head + subs.join("");
 }

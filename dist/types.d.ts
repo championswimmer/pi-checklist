@@ -1,5 +1,12 @@
 /** Shared types for pi-checklist. Pure — no pi imports. */
 export type TaskStatus = "planned" | "ongoing" | "done" | "cancelled";
+/** A single meta value. `null` is never stored: in an update patch it means
+ * "delete this key". */
+export type MetaValue = string | number | boolean;
+/** Preview-gated free-form key/value facts on a task or subtask. */
+export type TaskMeta = Record<string, MetaValue>;
+/** Meta as accepted by create (values only). */
+export type MetaInput = Record<string, MetaValue | null>;
 export interface Task {
     /** Exactly 3 chars, [a-z0-9], assigned at create, frozen. */
     id: string;
@@ -12,6 +19,8 @@ export interface Task {
     dependsOn: string[];
     /** Preview-gated subtasks (see MAX_SUBTASKS_PER_TASK). Absent = none. */
     subtasks?: Subtask[];
+    /** Preview-gated key/value meta (see TaskMeta). Absent = none. */
+    meta?: TaskMeta;
     createdAt: number;
     updatedAt: number;
 }
@@ -31,6 +40,8 @@ export interface Subtask {
     status: TaskStatus;
     /** 3-char sibling subtask ids (same parent) that must be `done` first. */
     dependsOn: string[];
+    /** Preview-gated key/value meta (see TaskMeta). Absent = none. */
+    meta?: TaskMeta;
     createdAt: number;
     updatedAt: number;
 }
@@ -108,6 +119,9 @@ export interface ChecklistSnapshot {
      * session snapshot and mirrored to the global prefs file like the other
      * settings (precedence: global file > snapshot > default). */
     subtasksEnabled?: boolean;
+    /** Preview-gated task/subtask `meta`. Absent = default (`false`). Same
+     * persistence/precedence as `subtasksEnabled`. */
+    metaEnabled?: boolean;
 }
 /** Tool names that can carry a ChecklistSnapshot in result details. */
 export declare const CHECKLIST_TOOLS: ReadonlySet<string>;
@@ -140,6 +154,7 @@ export interface CreateTaskInput {
     notes?: string;
     dependsOn?: string | string[];
     subtasks?: CreateSubtaskInput[];
+    meta?: MetaInput;
 }
 /** Subtask payload at create time. Subtasks are born `planned` (`status` is
  * not accepted — start them via checklist_update). */
@@ -148,6 +163,7 @@ export interface CreateSubtaskInput {
     title: string;
     notes?: string;
     dependsOn?: string | string[];
+    meta?: MetaInput;
 }
 export interface CreateInput {
     title?: string;
@@ -161,6 +177,8 @@ export interface UpdateTaskInput {
     notes?: string;
     dependsOn?: string | string[];
     subtasks?: UpdateSubtaskInput[];
+    /** Merged into the existing meta; `key: null` deletes that key. */
+    meta?: MetaInput;
 }
 /** Subtask patch inside a parent's update entry. An entry WITH `id` patches
  * the existing subtask; WITHOUT `id` it adds a new one (`title` required,
@@ -171,6 +189,8 @@ export interface UpdateSubtaskInput {
     notes?: string;
     status?: TaskStatus;
     dependsOn?: string | string[];
+    /** Merged into the existing meta; `key: null` deletes that key. */
+    meta?: MetaInput;
 }
 export interface ReadInput {
     status?: TaskStatus;
