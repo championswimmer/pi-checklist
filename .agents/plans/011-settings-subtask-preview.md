@@ -1,6 +1,6 @@
 # 011 — Settings subtask preview
 
-Status: implemented and verified; PR pending
+Status: complete — implemented, verified and independently reviewed; PR #3 ready to merge
 
 1. Pass the current subtasks toggle into the settings preview renderer, including initial render and invalidation.
 2. Keep five existing demo tasks; when enabled, show two children (done/ongoing) under Write the widget and one ready child under Update the docs. Use the same themed glyph/pill styling and indented ↳ convention as checklist rows. No real checklist mutations.
