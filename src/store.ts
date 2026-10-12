@@ -490,7 +490,10 @@ export function createOrAppend(
       `checklists support at most ${MAX_CHECKLIST_TASKS} tasks; this ${mode} request would create ${base.length + input.tasks.length}`,
     );
   }
-  const used = new Set(base.map((t) => t.id));
+  const baseTaskIds = base.map((t) => t.id);
+  const used = new Set(baseTaskIds);
+  // Ids are unique across tasks AND subtasks: existing subtask ids are taken too.
+  for (const t of base) for (const s of t.subtasks ?? []) used.add(s.id);
 
   // Pass 1: allocate ids (explicit first, then hashed).
   const ids: string[] = new Array(input.tasks.length);
@@ -516,7 +519,7 @@ export function createOrAppend(
 
   // Pass 2: resolve dependsOn against existing + new ids, build tasks.
   // taskIdSet stays task-only: tasks may not depend on subtasks.
-  const taskIdSet = new Set(used);
+  const taskIdSet = new Set([...baseTaskIds, ...ids]);
   const subtasksEnabled = opts?.subtasksEnabled === true;
   const metaEnabled = opts?.metaEnabled === true;
   const fresh: Task[] = input.tasks.map((t, i) => {
@@ -562,6 +565,110 @@ export function createOrAppend(
     checklist,
     assigned: fresh.map((t) => ({ id: t.id, title: t.title })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Manual add (the /checklist add dialog): id suggestion, validation, append
+// ---------------------------------------------------------------------------
+
+/** What the add-task dialog submits. */
+export interface AddTaskDraft {
+  id: string;
+  title: string;
+  dependsOn: string[];
+}
+
+/** Field-level problems; an empty object means the draft is fine. */
+export interface AddTaskErrors {
+  id?: string;
+  title?: string;
+  dependsOn?: string;
+  /** Not tied to one field (e.g. the checklist is full). */
+  form?: string;
+}
+
+export type AddTaskResult =
+  | { ok: true; checklist: Checklist; task: Task }
+  | { ok: false; errors: AddTaskErrors };
+
+/** Every task and subtask id in use. */
+function usedIds(current: Checklist | null): Set<string> {
+  const used = new Set<string>();
+  for (const t of current?.tasks ?? []) {
+    used.add(t.id);
+    for (const s of t.subtasks ?? []) used.add(s.id);
+  }
+  return used;
+}
+
+/** A random free 3-char id (not used by any task or subtask, not reserved).
+ * `rng` is injectable for tests. */
+export function suggestTaskId(current: Checklist | null, rng: () => number = Math.random): string {
+  const used = usedIds(current);
+  for (let attempt = 0; attempt < 256; attempt++) {
+    let id = "";
+    for (let i = 0; i < 3; i++) id += ALPHABET[Math.min(35, Math.floor(rng() * 36))];
+    if (!used.has(id) && !RESERVED_IDS.has(id)) return id;
+  }
+  return allocId("task", used);
+}
+
+/** Basic state validation for a manually added task. Checks that the draft is
+ * well formed and fits the checklist. It deliberately does NOT look at
+ * dependency status: depending on planned/ongoing/blocked tasks is allowed
+ * (the new task is simply born `planned` and blocked until they finish). */
+export function validateAddTask(current: Checklist | null, draft: AddTaskDraft): AddTaskErrors {
+  const errors: AddTaskErrors = {};
+  const tasks = current?.tasks ?? [];
+  if (tasks.length >= MAX_CHECKLIST_TASKS) {
+    errors.form = `the checklist is full (${tasks.length}/${MAX_CHECKLIST_TASKS} tasks)`;
+  }
+  const id = typeof draft.id === "string" ? draft.id.trim().toLowerCase() : "";
+  if (!ID_PATTERN.test(id)) {
+    errors.id = "the id must be exactly 3 characters: a–z and 0–9";
+  } else if (RESERVED_IDS.has(id)) {
+    errors.id = `"${id}" is a reserved word`;
+  } else {
+    const owner =
+      tasks.find((t) => t.id === id) ?? tasks.find((t) => (t.subtasks ?? []).some((s) => s.id === id));
+    if (owner) {
+      errors.id = owner.id === id ? `id "${id}" is already used by a task` : `id "${id}" is already used by a subtask of ${owner.id}`;
+    }
+  }
+  if (typeof draft.title !== "string" || draft.title.trim().length === 0) {
+    errors.title = "the task text can't be empty";
+  }
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const missing = (Array.isArray(draft.dependsOn) ? draft.dependsOn : []).filter((d) => !taskIds.has(String(d).toLowerCase()));
+  if (missing.length > 0) {
+    errors.dependsOn = `unknown task${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`;
+  }
+  return errors;
+}
+
+/** Validate and append one manually entered task (born `planned`). */
+export function addTask(
+  current: Checklist | null,
+  draft: AddTaskDraft,
+  now = Date.now(),
+  opts?: { subtasksEnabled?: boolean; metaEnabled?: boolean },
+): AddTaskResult {
+  const errors = validateAddTask(current, draft);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  try {
+    const dependsOn = [...new Set(draft.dependsOn.map((d) => d.toLowerCase()))];
+    const { checklist } = createOrAppend(
+      current,
+      { mode: "append", tasks: [{ id: draft.id.trim().toLowerCase(), title: draft.title, dependsOn }] },
+      now,
+      opts,
+    );
+    return { ok: true, checklist, task: checklist.tasks[checklist.tasks.length - 1]! };
+  } catch (err) {
+    // validateAddTask covers the expected cases; this keeps any other store
+    // rule (e.g. a future one) from escaping as an exception into the TUI.
+    return { ok: false, errors: { form: err instanceof Error ? err.message : String(err) } };
+  }
 }
 
 // ---------------------------------------------------------------------------

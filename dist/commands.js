@@ -1,6 +1,8 @@
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { Container, SettingsList, Text } from "@earendil-works/pi-tui";
+import { AddTaskDialog } from "./add-task-dialog.js";
 import { DIALOG_MAX_HEIGHT_PERCENT, DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, dialogMaxRows, frameDialog, previewLines, } from "./render.js";
+import { MAX_CHECKLIST_TASKS, suggestTaskId } from "./store.js";
 import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, isDisplayMode, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
 export function normalizeDisplayMode(raw) {
@@ -75,6 +77,11 @@ export function parseChecklistArgs(raw) {
         return { name: "hide" };
     if (head === "clear")
         return { name: "clear" };
+    if (head === "add") {
+        // Anything after `add` prefills the task text (original casing kept).
+        const title = raw.trim().replace(/^add\s*/i, "").trim();
+        return title === "" ? { name: "add" } : { name: "add", title };
+    }
     if (head === "settings" || head === "setting" || head === "mode") {
         const tokens = parts.slice(1);
         if (tokens.length === 0)
@@ -125,7 +132,7 @@ export function parseChecklistArgs(raw) {
     }
     return { name: "help" };
 }
-export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
+export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(ctx, deps) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
@@ -167,6 +174,44 @@ async function openChecklistDialog(ctx, deps) {
     if (goSettings) {
         await openSettingsScreen(ctx, deps);
     }
+}
+/** Human-readable summary of a failed add (non-dialog paths). */
+function describeAddErrors(errors) {
+    return [errors.form, errors.id, errors.title, errors.dependsOn].filter(Boolean).join("; ");
+}
+/** `/checklist add [text]`: dialog in the TUI, direct add (auto id) when there is no dialog surface. */
+async function runAddTask(ctx, deps, title) {
+    const checklist = deps.getChecklist();
+    const count = checklist?.tasks.length ?? 0;
+    if (count >= MAX_CHECKLIST_TASKS) {
+        ctx.ui.notify(`checklist is full (${count}/${MAX_CHECKLIST_TASKS} tasks): can't add another`, "warning");
+        return;
+    }
+    const describe = (task) => `checklist: added ${task.id} "${task.title}"${task.dependsOn.length > 0 ? ` (depends on ${task.dependsOn.join(", ")})` : ""}`;
+    if (ctx.mode !== "tui" || !ctx.hasUI) {
+        if (!title) {
+            ctx.ui.notify("/checklist add opens a dialog in the TUI; here pass the task text: /checklist add <text>", "warning");
+            return;
+        }
+        const result = deps.addTask({ id: suggestTaskId(checklist), title, dependsOn: [] }, ctx);
+        ctx.ui.notify(result.ok ? describe(result.task) : `checklist: not added: ${describeAddErrors(result.errors)}`, result.ok ? "info" : "warning");
+        return;
+    }
+    const opts = deps.getRenderOpts();
+    let added;
+    await ctx.ui.custom((tui, theme, _kb, done) => new AddTaskDialog(checklist, { id: suggestTaskId(checklist), title }, theme, {
+        onSubmit: (draft) => {
+            const result = deps.addTask(draft, ctx);
+            if (result.ok)
+                added = result.task;
+            return result;
+        },
+        onClose: () => done(),
+        requestRender: () => tui.requestRender(),
+        getMaxRows: () => dialogMaxRows(tui.terminal.rows),
+    }, opts), { overlay: true, overlayOptions: { width: "70%", maxHeight: `${DIALOG_MAX_HEIGHT_PERCENT}%`, anchor: "center" } });
+    if (added)
+        ctx.ui.notify(describe(added), "info");
 }
 /** One interactive screen for every checklist display preference, with a live preview. */
 async function openSettingsScreen(ctx, deps) {
@@ -305,7 +350,7 @@ async function openSettingsScreen(ctx, deps) {
 }
 export function registerChecklistCommand(pi, deps) {
     const options = {
-        description: "Show the session task checklist in a popup dialog (args: show | hide | clear | settings)",
+        description: "Show the session task checklist in a popup dialog (args: show | hide | clear | add [text] | settings)",
         getArgumentCompletions: (prefix) => {
             const lower = prefix.toLowerCase();
             if (lower.startsWith("settings ") || lower === "settings") {
@@ -316,7 +361,7 @@ export function registerChecklistCommand(pi, deps) {
                 const values = candidates.map((m) => `settings ${base}${m}`);
                 return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
             }
-            const opts = ["show", "hide", "clear", "settings"];
+            const opts = ["show", "hide", "clear", "add", "settings"];
             const filtered = opts.filter((o) => o.startsWith(lower));
             return filtered.length > 0 ? filtered.map((value) => ({ value, label: value })) : null;
         },
@@ -343,6 +388,10 @@ export function registerChecklistCommand(pi, deps) {
                     return;
                 deps.clear(ctx);
                 ctx.ui.notify("checklist cleared", "info");
+                return;
+            }
+            if (action.name === "add") {
+                await runAddTask(ctx, deps, action.title);
                 return;
             }
             if (action.name === "settings") {

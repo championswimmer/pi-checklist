@@ -2,6 +2,7 @@
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
 import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
 import { Container, SettingsList, Text, type SettingItem } from "@earendil-works/pi-tui";
+import { AddTaskDialog } from "./add-task-dialog.js";
 import {
   DIALOG_MAX_HEIGHT_PERCENT,
   DISPLAY_MODE_DESCRIPTIONS,
@@ -16,6 +17,7 @@ import {
   previewLines,
   type RenderOpts,
 } from "./render.js";
+import { MAX_CHECKLIST_TASKS, suggestTaskId, type AddTaskDraft, type AddTaskResult } from "./store.js";
 import {
   DISPLAY_MODES,
   ICON_SETS,
@@ -36,6 +38,7 @@ export type ChecklistAction =
   | { name: "show" }
   | { name: "hide" }
   | { name: "clear" }
+  | { name: "add"; title?: string }
   | { name: "settings"; displayMode?: DisplayMode; statusStyle?: StatusStyle; iconSet?: IconSet; usage?: UsageMode; subtasksEnabled?: boolean; metaEnabled?: boolean }
   | { name: "help" };
 
@@ -100,6 +103,11 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
   if (head === "show") return { name: "show" };
   if (head === "hide") return { name: "hide" };
   if (head === "clear") return { name: "clear" };
+  if (head === "add") {
+    // Anything after `add` prefills the task text (original casing kept).
+    const title = raw.trim().replace(/^add\s*/i, "").trim();
+    return title === "" ? { name: "add" } : { name: "add", title };
+  }
   if (head === "settings" || head === "setting" || head === "mode") {
     const tokens = parts.slice(1);
     if (tokens.length === 0) return { name: "settings" };
@@ -151,7 +159,7 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
 }
 
 export const CHECKLIST_USAGE =
-  "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
+  "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(
@@ -203,6 +211,8 @@ async function openChecklistDialog(
 }
 
 export interface ChecklistCommandDeps {
+  /** Validate against the live checklist and, when fine, append + persist + refresh the UI. */
+  addTask: (draft: AddTaskDraft, ctx: ExtensionCommandContext) => AddTaskResult;
   getDisplayMode: () => DisplayMode;
   setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
   getStatusStyle: () => StatusStyle;
@@ -218,6 +228,57 @@ export interface ChecklistCommandDeps {
   getRenderOpts: () => RenderOpts;
   clear: (ctx: ExtensionCommandContext) => void;
   getChecklist: () => import("./types.js").Checklist | null;
+}
+
+/** Human-readable summary of a failed add (non-dialog paths). */
+function describeAddErrors(errors: Extract<AddTaskResult, { ok: false }>["errors"]): string {
+  return [errors.form, errors.id, errors.title, errors.dependsOn].filter(Boolean).join("; ");
+}
+
+/** `/checklist add [text]`: dialog in the TUI, direct add (auto id) when there is no dialog surface. */
+async function runAddTask(ctx: ExtensionCommandContext, deps: ChecklistCommandDeps, title: string | undefined): Promise<void> {
+  const checklist = deps.getChecklist();
+  const count = checklist?.tasks.length ?? 0;
+  if (count >= MAX_CHECKLIST_TASKS) {
+    ctx.ui.notify(`checklist is full (${count}/${MAX_CHECKLIST_TASKS} tasks): can't add another`, "warning");
+    return;
+  }
+  const describe = (task: { id: string; title: string; dependsOn: string[] }) =>
+    `checklist: added ${task.id} "${task.title}"${task.dependsOn.length > 0 ? ` (depends on ${task.dependsOn.join(", ")})` : ""}`;
+
+  if (ctx.mode !== "tui" || !ctx.hasUI) {
+    if (!title) {
+      ctx.ui.notify("/checklist add opens a dialog in the TUI; here pass the task text: /checklist add <text>", "warning");
+      return;
+    }
+    const result = deps.addTask({ id: suggestTaskId(checklist), title, dependsOn: [] }, ctx);
+    ctx.ui.notify(result.ok ? describe(result.task) : `checklist: not added: ${describeAddErrors(result.errors)}`, result.ok ? "info" : "warning");
+    return;
+  }
+
+  const opts = deps.getRenderOpts();
+  let added: { id: string; title: string; dependsOn: string[] } | undefined;
+  await ctx.ui.custom<void>(
+    (tui, theme, _kb, done) =>
+      new AddTaskDialog(
+        checklist,
+        { id: suggestTaskId(checklist), title },
+        theme,
+        {
+          onSubmit: (draft) => {
+            const result = deps.addTask(draft, ctx);
+            if (result.ok) added = result.task;
+            return result;
+          },
+          onClose: () => done(),
+          requestRender: () => tui.requestRender(),
+          getMaxRows: () => dialogMaxRows(tui.terminal.rows),
+        },
+        opts,
+      ),
+    { overlay: true, overlayOptions: { width: "70%", maxHeight: `${DIALOG_MAX_HEIGHT_PERCENT}%`, anchor: "center" } },
+  );
+  if (added) ctx.ui.notify(describe(added), "info");
 }
 
 /** One interactive screen for every checklist display preference, with a live preview. */
@@ -373,7 +434,7 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
 
 export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistCommandDeps): void {
   const options = {
-    description: "Show the session task checklist in a popup dialog (args: show | hide | clear | settings)",
+    description: "Show the session task checklist in a popup dialog (args: show | hide | clear | add [text] | settings)",
     getArgumentCompletions: (prefix: string) => {
       const lower = prefix.toLowerCase();
       if (lower.startsWith("settings ") || lower === "settings") {
@@ -384,7 +445,7 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
         const values = candidates.map((m) => `settings ${base}${m}`);
         return values.length > 0 ? values.map((value) => ({ value, label: value })) : null;
       }
-      const opts = ["show", "hide", "clear", "settings"];
+      const opts = ["show", "hide", "clear", "add", "settings"];
       const filtered = opts.filter((o) => o.startsWith(lower));
       return filtered.length > 0 ? filtered.map((value) => ({ value, label: value })) : null;
     },
@@ -410,6 +471,10 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
         if (!ok) return;
         deps.clear(ctx);
         ctx.ui.notify("checklist cleared", "info");
+        return;
+      }
+      if (action.name === "add") {
+        await runAddTask(ctx, deps, action.title);
         return;
       }
       if (action.name === "settings") {

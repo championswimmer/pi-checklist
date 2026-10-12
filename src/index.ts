@@ -32,7 +32,7 @@ import {
   renderReadCall,
   renderUpdateCall,
 } from "./render.js";
-import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveMetaEnabled, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, addTask, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveMetaEnabled, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import {
   CREATE_GUIDELINES,
   CREATE_SNIPPET,
@@ -259,6 +259,19 @@ export default function (pi: ExtensionAPI) {
   // -- /checklist command ----------------------------------------------------
 
   registerChecklistCommand(pi, {
+    // Manual add (/checklist add). Always validates against the live
+    // checklist — the agent may have changed it while the dialog was open.
+    addTask: (draft, ctx: ExtensionContext) => {
+      const result = addTask(state.checklist, draft, Date.now(), {
+        subtasksEnabled: getSubtasksEnabled(),
+        metaEnabled: getMetaEnabled(),
+      });
+      // Same persistence as a tool mutation, minus the tool result: session
+      // custom entry + widget/footer refresh. The injected per-turn snippet
+      // tells the agent about the new task on its next turn.
+      if (result.ok) commit({ ...state, checklist: result.checklist }, ctx);
+      return result;
+    },
     getDisplayMode,
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionContext) => {
       state = { ...state, displayMode: mode, widgetVisible: mode !== "hidden" };

@@ -1,6 +1,7 @@
 /** /checklist command: overlay + settings (display / style / icons / usage) + show/hide/clear. */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { type RenderOpts } from "./render.js";
+import { type AddTaskDraft, type AddTaskResult } from "./store.js";
 import { type DisplayMode, type IconSet, type StatusStyle, type UsageMode } from "./types.js";
 export type ChecklistAction = {
     name: "open";
@@ -10,6 +11,9 @@ export type ChecklistAction = {
     name: "hide";
 } | {
     name: "clear";
+} | {
+    name: "add";
+    title?: string;
 } | {
     name: "settings";
     displayMode?: DisplayMode;
@@ -35,8 +39,10 @@ export declare function normalizeSubtasksSetting(raw: string): boolean | undefin
  * on/off stay with subtasks, so meta needs its own words. */
 export declare function normalizeMetaSetting(raw: string): boolean | undefined;
 export declare function parseChecklistArgs(raw: string): ChecklistAction;
-export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
+export declare const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 export interface ChecklistCommandDeps {
+    /** Validate against the live checklist and, when fine, append + persist + refresh the UI. */
+    addTask: (draft: AddTaskDraft, ctx: ExtensionCommandContext) => AddTaskResult;
     getDisplayMode: () => DisplayMode;
     setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
     getStatusStyle: () => StatusStyle;

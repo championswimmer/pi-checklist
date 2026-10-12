@@ -1,7 +1,7 @@
 import { registerChecklistCommand } from "./commands.js";
 import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
-import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveMetaEnabled, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
+import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, addTask, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveMetaEnabled, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
 const WIDGET_KEY = "checklist";
 const STATUS_KEY = "checklist";
@@ -181,6 +181,20 @@ export default function (pi) {
     });
     // -- /checklist command ----------------------------------------------------
     registerChecklistCommand(pi, {
+        // Manual add (/checklist add). Always validates against the live
+        // checklist — the agent may have changed it while the dialog was open.
+        addTask: (draft, ctx) => {
+            const result = addTask(state.checklist, draft, Date.now(), {
+                subtasksEnabled: getSubtasksEnabled(),
+                metaEnabled: getMetaEnabled(),
+            });
+            // Same persistence as a tool mutation, minus the tool result: session
+            // custom entry + widget/footer refresh. The injected per-turn snippet
+            // tells the agent about the new task on its next turn.
+            if (result.ok)
+                commit({ ...state, checklist: result.checklist }, ctx);
+            return result;
+        },
         getDisplayMode,
         setDisplayMode: (mode, ctx) => {
             state = { ...state, displayMode: mode, widgetVisible: mode !== "hidden" };

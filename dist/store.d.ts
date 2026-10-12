@@ -75,6 +75,41 @@ export declare function createOrAppend(current: Checklist | null, input: CreateI
     subtasksEnabled?: boolean;
     metaEnabled?: boolean;
 }): CreateResult;
+/** What the add-task dialog submits. */
+export interface AddTaskDraft {
+    id: string;
+    title: string;
+    dependsOn: string[];
+}
+/** Field-level problems; an empty object means the draft is fine. */
+export interface AddTaskErrors {
+    id?: string;
+    title?: string;
+    dependsOn?: string;
+    /** Not tied to one field (e.g. the checklist is full). */
+    form?: string;
+}
+export type AddTaskResult = {
+    ok: true;
+    checklist: Checklist;
+    task: Task;
+} | {
+    ok: false;
+    errors: AddTaskErrors;
+};
+/** A random free 3-char id (not used by any task or subtask, not reserved).
+ * `rng` is injectable for tests. */
+export declare function suggestTaskId(current: Checklist | null, rng?: () => number): string;
+/** Basic state validation for a manually added task. Checks that the draft is
+ * well formed and fits the checklist. It deliberately does NOT look at
+ * dependency status: depending on planned/ongoing/blocked tasks is allowed
+ * (the new task is simply born `planned` and blocked until they finish). */
+export declare function validateAddTask(current: Checklist | null, draft: AddTaskDraft): AddTaskErrors;
+/** Validate and append one manually entered task (born `planned`). */
+export declare function addTask(current: Checklist | null, draft: AddTaskDraft, now?: number, opts?: {
+    subtasksEnabled?: boolean;
+    metaEnabled?: boolean;
+}): AddTaskResult;
 export interface UpdateResult {
     checklist: Checklist;
     changes: string[];
