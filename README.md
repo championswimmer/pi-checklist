@@ -1,5 +1,8 @@
 # pi-checklist
 
+[![npm version](https://img.shields.io/npm/v/pi-checklist)](https://www.npmjs.com/package/pi-checklist)
+[![npm downloads](https://img.shields.io/npm/dm/pi-checklist)](https://www.npmjs.com/package/pi-checklist)
+
 A [pi](https://github.com/earendil-works/pi-coding-agent) extension that gives the coding agent a **session-scoped task checklist**.
 
 The agent can:
