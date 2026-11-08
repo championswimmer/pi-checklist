@@ -53,6 +53,8 @@ Display placement:
 - `end-of-turn` — widget above the input box, refreshed when each turn settles.
 - `hidden` — no widget or footer; reopen with `/checklist` (overlay) or `/checklist show`.
 
+The footer summary colors each icon and count using the active Pi theme (done: success, ongoing: warning, blocked: error, ready: text, cancelled: dim). It is published with `ctx.ui.setStatus` under the key `checklist`. In [pi-footer](https://github.com/wobondar/pi-footer), add a **Pi Extension Status** widget with key `checklist` in `/footer`, or enable its **Pi extensions** status row; choose one to avoid duplicates. Leave widget color and bold overrides unset to preserve the summary's colors. This uses extension status, not pi-footer event widgets. The status clears when the checklist is empty or hidden.
+
 Progress status style:
 
 - `color` — rows are only color-coded, no status word.

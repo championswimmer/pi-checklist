@@ -51,6 +51,7 @@ test("minimal mode persists globally and remains footer-only across turns and sw
     let command;
     let widget;
     let status;
+    let statusKey;
     extension({
       on: (name, handler) => events.set(name, handler),
       registerTool: (tool) => tools.set(tool.name, tool),
@@ -63,14 +64,16 @@ test("minimal mode persists globally and remains footer-only across turns and sw
       sessionManager: { getBranch: () => [{ type: "custom", customType: "pi-checklist", data: { v: 1, checklist, displayMode: "statusbar" } }] },
       ui: {
         setWidget: (_key, value) => { widget = value; },
-        setStatus: (_key, value) => { status = value; },
+        theme: { fg: (name, text) => `<${name}>${text}</${name}>` },
+        setStatus: (key, value) => { statusKey = key; status = value; },
         notify() {},
         confirm: async () => true,
       },
     };
     const assertMinimal = () => {
       assert.equal(widget, undefined);
-      assert.equal(status, footerText(checklist, opts));
+      assert.equal(statusKey, "checklist");
+      assert.equal(status, footerText(checklist, opts, ctx.ui.theme));
     };
     for (const event of ["session_start", "turn_start", "turn_end", "agent_settled", "session_tree"]) {
       await events.get(event)({}, ctx);
@@ -78,14 +81,14 @@ test("minimal mode persists globally and remains footer-only across turns and sw
     }
     await command.handler("settings statusbar", ctx);
     assert.equal(typeof widget, "function");
-    assert.equal(status, "☑️ 1/4 ✅ 1 🔄 1 ▶️ 1 ⛔ 1");
+    assert.equal(status, footerText(checklist, opts, ctx.ui.theme));
     await command.handler("settings status-minimal", ctx);
     assertMinimal();
     assert.equal(entries.at(-1).displayMode, "status-minimal");
     assert.equal(loadGlobalPrefs().displayMode, "status-minimal");
     await tools.get("checklist_update").execute("update", { updates: [{ id: "bbb", status: "done" }] }, undefined, undefined, ctx);
     assert.equal(widget, undefined);
-    assert.equal(status, "☑️ 2/4 ✅ 2 ▶️ 1 ⛔ 1");
+    assert.equal(status, "<accent>☑️ 2/4</accent> <success>✅ 2</success> <text>▶️ 1</text> <error>⛔ 1</error>");
     await command.handler("hide", ctx);
     assert.equal(widget, undefined);
     assert.equal(status, undefined);
@@ -94,7 +97,7 @@ test("minimal mode persists globally and remains footer-only across turns and sw
     await events.get("turn_start")({}, ctx);
     assert.equal(widget, undefined);
     await command.handler("settings status-minimal", ctx);
-    assert.equal(status, "☑️ 2/4 ✅ 2 ▶️ 1 ⛔ 1");
+    assert.equal(status, "<accent>☑️ 2/4</accent> <success>✅ 2</success> <text>▶️ 1</text> <error>⛔ 1</error>");
     assert.equal(widget, undefined);
     await command.handler("clear", ctx);
     assert.equal(status, undefined);

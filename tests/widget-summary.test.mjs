@@ -48,6 +48,14 @@ for (const [style, iconSet, expected] of [
   });
 }
 
+test("footer colors each nonzero group with its semantic theme color", () => {
+  const theme = { fg: (name, text) => `<${name}>${text}</${name}>` };
+  const opts = { style: "pill", iconSet: "emoji" };
+  assert.equal(footerText(mixedChecklist(), opts, theme),
+    "<accent>☑️ 1/4</accent> <success>✅ 1</success> <warning>🔄 1</warning> <text>▶️ 1</text> <error>⛔ 1</error> <dim>❌ 1</dim>");
+  assert.equal(footerText(null, opts, theme), undefined);
+});
+
 test("summary hides zero states with selected artwork in every style", () => {
   const { checklist } = createOrAppend(null, { tasks: [{ id: "don", title: "Finished" }] }, 1);
   const completed = applyUpdates(checklist, [{ id: "don", status: "done" }], 2).checklist;

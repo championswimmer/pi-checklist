@@ -126,7 +126,7 @@ export function colorFor(kind: StatusKind): ThemeFgName {
 }
 
 /** Compact summaries always use the selected artwork, regardless of row style. */
-function compactSummary(checklist: Checklist, opts: RenderOpts, title = ""): string {
+function compactSummary(checklist: Checklist, opts: RenderOpts, title = "", theme?: Theme): string {
   const c = countsOf(checklist);
   const icons = opts.iconSet === "emoji" ? EMOJI_GLYPHS : NF_GLYPHS;
   const checklistIcon = opts.iconSet === "emoji" ? "☑️" : "\uED7A"; // checklist
@@ -135,14 +135,17 @@ function compactSummary(checklist: Checklist, opts: RenderOpts, title = ""): str
     ["done", c.done], ["ongoing", c.ongoing], ["ready", c.ready],
     ["blocked", c.blocked], ["cancelled", cancelled],
   ];
-  const counts = states.filter(([, count]) => count > 0).map(([kind, count]) => `${icons[kind]} ${count}`);
+  const counts = states.filter(([, count]) => count > 0).map(([kind, count]) => {
+    const text = `${icons[kind]} ${count}`;
+    return theme ? theme.fg(colorFor(kind), text) : text;
+  });
   const progress = `${checklistIcon}${title} ${c.done}/${c.total}`;
-  return [progress, ...counts].join(" ");
+  return [theme ? theme.fg("accent", progress) : progress, ...counts].join(" ");
 }
 
-export function footerText(checklist: Checklist | null, opts: RenderOpts = DEFAULT_RENDER_OPTS): string | undefined {
+export function footerText(checklist: Checklist | null, opts: RenderOpts = DEFAULT_RENDER_OPTS, theme?: Theme): string | undefined {
   if (!checklist || checklist.tasks.length === 0) return undefined;
-  return compactSummary(checklist, opts);
+  return compactSummary(checklist, opts, "", theme);
 }
 
 export interface WidgetLine {
