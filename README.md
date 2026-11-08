@@ -28,7 +28,7 @@ The `/checklist` dialog (above) shows every task. Session checklists hold at mos
 
 ## Status
 
-Implemented (v1.0.0). See [`.agents/plans/001-checklist-extension.md`](.agents/plans/001-checklist-extension.md) for the design.
+Implemented; see the usage and development sections below.
 
 ## Usage
 
