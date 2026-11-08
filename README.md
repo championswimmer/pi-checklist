@@ -46,12 +46,11 @@ Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `d
 
 A session checklist holds at most **10 tasks**. The live TUI widget shows the **top 5** prioritized tasks (with an overflow hint when needed) plus a `☑ n/m` footer; `/checklist` (or `/checklist show`) opens a centered dialog with **all** tasks (`/checklist clear` empties the list, `/checklist add` adds a task by hand — see below). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
 
-Display placement:
+Display controls: **Statusbar widget** and **Status footer** can each be switched on or off independently in `/checklist settings`. Both are on by default. The widget appears below the input box; the footer shows only the compact summary. Both off hides the display without affecting `/checklist`.
 
-- `statusbar` — persistent widget below the input box + footer (default). Both summaries use a checkmark, done/total ratio, then icon counts for done, ongoing, ready, blocked and cancelled, e.g. `☑️ 2/5 ✅ 2 🔄 3`. Zero-count states are hidden, with one space after each icon and between groups. They always honor your Nerd Font / emoji setting, regardless of task-row style; the footer omits the checklist title. Cancelled tasks don't count toward the progress denominator.
-- `status-minimal` — only the compact icon summary described above in the statusline; no task widget. Enable with `/checklist settings status-minimal`.
-- `end-of-turn` — widget above the input box, refreshed when each turn settles.
-- `hidden` — no widget or footer; reopen with `/checklist` (overlay) or `/checklist show`.
+The legacy quick-set modes remain available: `statusbar` (both), `widget-only` (widget only), `status-minimal` (footer only), `hidden` (neither), and `end-of-turn` (widget above the input box when the turn settles, plus footer). Changing either toggle from `end-of-turn` uses the normal below-editor widget placement.
+
+Both summaries use a checkmark, done/total ratio, then icon counts for done, ongoing, ready, blocked and cancelled, e.g. `☑️ 2/5 ✅ 2 🔄 3`. Zero-count states are hidden. They honor your Nerd Font / emoji setting regardless of task-row style; the footer omits the checklist title. Cancelled tasks don't count toward the progress denominator.
 
 The footer summary colors each icon and count using the active Pi theme (done: success, ongoing: warning, blocked: error, ready: text, cancelled: dim). It is published with `ctx.ui.setStatus` under the key `checklist`. In [pi-footer](https://github.com/wobondar/pi-footer), add a **Pi Extension Status** widget with key `checklist` in `/footer`, or enable its **Pi extensions** status row; choose one to avoid duplicates. Leave widget color and bold overrides unset to preserve the summary's colors. This uses extension status, not pi-footer event widgets. The status clears when the checklist is empty or hidden.
 

@@ -68,7 +68,7 @@ test("settings renders initial preference and toggles demo children immediately"
     });
     const children = () => screen.render(100).filter((line) => line.includes("↳"));
     assert.equal(children().length, initial ? 3 : 0);
-    for (let i = 0; i < 4; i++) screen.handleInput("\u001b[B");
+    for (let i = 0; i < 5; i++) screen.handleInput("\u001b[B");
     screen.handleInput(" ");
     assert.equal(enabled, !initial);
     assert.equal(children().length, initial ? 0 : 3);

@@ -3,12 +3,14 @@ import { Container, SettingsList, Text } from "@earendil-works/pi-tui";
 import { AddTaskDialog } from "./add-task-dialog.js";
 import { DIALOG_MAX_HEIGHT_PERCENT, DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, dialogMaxRows, frameDialog, previewLines, } from "./render.js";
 import { MAX_CHECKLIST_TASKS, suggestTaskId } from "./store.js";
-import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, isDisplayMode, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
+import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
 /** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
 export function normalizeDisplayMode(raw) {
     const word = raw.trim().toLowerCase().replace(/_/g, "-");
     if (word === "statusbar" || word === "status")
         return "statusbar";
+    if (word === "widget-only")
+        return "widget-only";
     if (word === "status-minimal")
         return "status-minimal";
     if (word === "end-of-turn" || word === "endofturn" || word === "end" || word === "turn")
@@ -132,7 +134,7 @@ export function parseChecklistArgs(raw) {
     }
     return { name: "help" };
 }
-export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
+export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|widget-only|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(ctx, deps) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
@@ -237,11 +239,18 @@ async function openSettingsScreen(ctx, deps) {
         };
         const items = [
             {
-                id: "display",
-                label: "Checklist display",
-                currentValue: display,
-                values: [...DISPLAY_MODES],
-                description: "statusbar: below the input box · status-minimal: summary in footer only · end-of-turn: above it · hidden: off",
+                id: "widget",
+                label: "Statusbar widget",
+                currentValue: display === "hidden" || display === "status-minimal" ? "off" : "on",
+                values: ["off", "on"],
+                description: "Show the task widget below the input box.",
+            },
+            {
+                id: "footer",
+                label: "Status footer",
+                currentValue: display === "hidden" || display === "widget-only" ? "off" : "on",
+                values: ["off", "on"],
+                description: "Show the compact progress summary in the footer.",
             },
             {
                 id: "status",
@@ -284,10 +293,12 @@ async function openSettingsScreen(ctx, deps) {
         // dialogs draw their own border.
         const container = new Container();
         const list = new SettingsList(items, 7, getSettingsListTheme(), (id, newValue) => {
-            if (id === "display" && isDisplayMode(newValue)) {
-                display = newValue;
-                deps.setDisplayMode(newValue, ctx);
-                ctx.ui.notify(`checklist display: ${DISPLAY_MODE_LABELS[newValue]}`, "info");
+            if ((id === "widget" || id === "footer") && (newValue === "on" || newValue === "off")) {
+                const widget = id === "widget" ? newValue === "on" : display !== "hidden" && display !== "status-minimal";
+                const footer = id === "footer" ? newValue === "on" : display !== "hidden" && display !== "widget-only";
+                display = widget ? (footer ? "statusbar" : "widget-only") : (footer ? "status-minimal" : "hidden");
+                deps.setDisplayMode(display, ctx);
+                ctx.ui.notify(`checklist ${id}: ${newValue}`, "info");
             }
             else if (id === "status" && isStatusStyle(newValue)) {
                 style = newValue;

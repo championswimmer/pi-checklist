@@ -68,12 +68,12 @@ export interface Checklist {
  * - "hidden": no widget or footer; use /checklist (overlay) or
  *   /checklist show (back to statusbar) to see it.
  */
-export type DisplayMode = "statusbar" | "status-minimal" | "end-of-turn" | "hidden";
+export type DisplayMode = "statusbar" | "widget-only" | "status-minimal" | "end-of-turn" | "hidden";
 
-export const DISPLAY_MODES: readonly DisplayMode[] = ["statusbar", "status-minimal", "end-of-turn", "hidden"];
+export const DISPLAY_MODES: readonly DisplayMode[] = ["statusbar", "widget-only", "status-minimal", "end-of-turn", "hidden"];
 
 export function isDisplayMode(value: unknown): value is DisplayMode {
-  return value === "statusbar" || value === "status-minimal" || value === "end-of-turn" || value === "hidden";
+  return value === "statusbar" || value === "widget-only" || value === "status-minimal" || value === "end-of-turn" || value === "hidden";
 }
 
 /** How per-task progress status is shown in the widget / overlay / transcript.
