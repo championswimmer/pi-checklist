@@ -127,6 +127,8 @@ Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in
 - [x] Tighter summaries (plans 009–010): hide zero-count states and use one space after each icon and between groups in both header and footer, e.g. `☑️ 2/5 ✅ 2 🔄 3`; selected artwork and progress ratio retained. User approved spaced emoji and Nerd Font samples; Nerd Font checklist prefix is `` (U+ED7A), emoji prefix remains `☑️`; all 30 tests pass.
 - [x] Compact summaries (plan 008): widget header and minimal footer share checkmark + done/total + icon/count pairs for done, ongoing, ready, blocked and cancelled. Summaries always use the selected Nerd Font/emoji artwork regardless of task-row style; widget retains optional title, footer omits it, cancelled tasks remain excluded from denominator. `tests/widget-summary.test.mjs` covers variants, counts, empty lists and narrow widths (29 tests total green); source extension loaded in print and TUI modes with isolated global preferences.
 
+- [x] Independent display toggles (plan 015): `/checklist settings` exposes separate Statusbar widget and Status footer on/off rows. Persisted `displayMode` retains legacy modes and adds `widget-only`; switching a toggle from legacy `end-of-turn` returns to the normal below-editor placement. Quick-set modes remain supported.
+
 - [x] pi-footer compatibility (plan 013): publish the themed compact footer via `ctx.ui.setStatus("checklist", ...)` (no pi-footer events); users add a Pi Extension Status widget with key `checklist` or enable the Pi extensions row. Status groups use semantic theme foreground colors; pi-footer widget color/bold overrides discard embedded colors.
 
 ## Publishing notes

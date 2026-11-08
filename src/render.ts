@@ -259,6 +259,7 @@ export function frameDialog(title: string, inner: string[], width: number, theme
 
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   statusbar: "statusbar — below the input box",
+  "widget-only": "widget-only — widget without footer",
   "status-minimal": "status-minimal — summary in footer only",
   "end-of-turn": "end of turn — above the input box",
   hidden: "hidden — off, open on demand",
@@ -266,6 +267,7 @@ export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
 
 export const DISPLAY_MODE_DESCRIPTIONS: Record<DisplayMode, string> = {
   statusbar: "Persistent widget below the input box + footer counter.",
+  "widget-only": "Persistent widget below the input box without footer.",
   "status-minimal": "First-line progress summary in the footer only. No task widget.",
   "end-of-turn": "Widget above the input box, refreshed when each turn settles.",
   hidden: "No widget or footer. Open with /checklist (overlay) or /checklist show.",

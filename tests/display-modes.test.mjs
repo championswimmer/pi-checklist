@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { initTheme } from "@earendil-works/pi-coding-agent";
 
 import extension from "../dist/index.js";
 import { normalizeDisplayMode, parseChecklistArgs } from "../dist/commands.js";
@@ -79,6 +80,28 @@ test("minimal mode persists globally and remains footer-only across turns and sw
       await events.get(event)({}, ctx);
       assertMinimal();
     }
+    initTheme();
+    let screen;
+    ctx.ui.custom = async (factory) => { screen = factory({ requestRender() {} }, { fg: (_c, s) => s, bg: (_c, s) => s, bold: (s) => s }, {}, () => {}); };
+    await command.handler("settings", ctx);
+    screen.handleInput(" "); // widget on, footer remains on
+    assert.equal(typeof widget, "function");
+    assert.ok(status);
+    screen.handleInput("\u001b[B");
+    screen.handleInput(" "); // footer off, widget remains on
+    assert.equal(typeof widget, "function");
+    assert.equal(status, undefined);
+    assert.equal(loadGlobalPrefs().displayMode, "widget-only");
+    await events.get("session_tree")({}, ctx);
+    assert.equal(typeof widget, "function");
+    assert.equal(status, undefined);
+    screen.handleInput("\u001b[A");
+    screen.handleInput(" "); // both off
+    assert.equal(widget, undefined);
+    assert.equal(status, undefined);
+    screen.handleInput("\u001b[B");
+    screen.handleInput(" "); // footer only
+    assertMinimal();
     await command.handler("settings statusbar", ctx);
     assert.equal(typeof widget, "function");
     assert.equal(status, footerText(checklist, opts, ctx.ui.theme));

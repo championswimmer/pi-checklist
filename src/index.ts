@@ -100,7 +100,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       // Footer stays live in all visible modes, including during turns.
-      ctx.ui.setStatus(STATUS_KEY, footerText(checklist, getRenderOpts(), ctx.ui.theme));
+      ctx.ui.setStatus(STATUS_KEY, mode === "widget-only" ? undefined : footerText(checklist, getRenderOpts(), ctx.ui.theme));
       if (mode === "status-minimal") {
         ctx.ui.setWidget(WIDGET_KEY, undefined);
         return;
