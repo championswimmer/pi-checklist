@@ -137,3 +137,11 @@ Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in
 - npm name is `pi-checklist` (unscoped); version lives in `package.json`; `publishConfig.access = "public"` kept (harmless unscoped).
 - `publishConfig.access = "public"` if scoped.
 - Trusted publishing: `.github/workflows/release.yml` publishes to npm on semver tag push (`vX.Y.Z` must match `package.json`) via GitHub OIDC — no `NPM_TOKEN`. One-time manual setup on npmjs.com → package Settings → Trusted Publisher: GitHub Actions `championswimmer` / `pi-checklist` / workflow file `release.yml`. Uses `npm install --ignore-scripts` + `npm run build` + `npm publish --access public --provenance` (provenance is automatic with trusted publishing; flag kept explicit).
+
+### Release changelog
+
+Stable version tags trigger the `changelog` job in `.github/workflows/release.yml`.
+`scripts/changelog.mjs` uses authenticated GitHub-generated PR notes and Git
+commit ranges to regenerate `CHANGELOG.md`; `--release vX.Y.Z` also creates a
+missing GitHub release. The job pushes only a changelog commit to `main` and
+must be re-run if a concurrent push prevents its non-forced push.

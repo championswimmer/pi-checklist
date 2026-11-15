@@ -45,3 +45,41 @@ jobs:
 
       - name: Publish to npm with trusted publishing
         run: npm publish --access public --provenance
+
+  changelog:
+    # Prereleases are published to npm, but only stable releases enter the changelog.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: changelog-main
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main and all tags
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Generate changelog and create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Not a stable semver tag: $RELEASE_TAG"
+            exit 0
+          fi
+          git merge-base --is-ancestor "$RELEASE_TAG" HEAD || { echo "Tag is not reachable from main"; exit 1; }
+          node scripts/changelog.mjs --release "$RELEASE_TAG"
+
+      - name: Commit changelog to main
+        run: |
+          if git diff --quiet -- CHANGELOG.md; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          git commit -m 'docs: update changelog [skip ci]'
+          # A concurrent main update makes this fail rather than overwriting it.
+          git push origin HEAD:main

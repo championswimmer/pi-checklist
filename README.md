@@ -164,3 +164,17 @@ Hot-reload inside pi with `/reload`.
 - Maintainers cut releases with `node scripts/release.mjs <major|minor|patch>`
   (see `.agents/skills/release/SKILL.md`) — it bumps, rebuilds `dist/`,
   commits, tags `vX.Y.Z`, and pushes, and the tag push publishes to npm.
+
+## Releases and changelog
+
+Run `node scripts/release.mjs patch` (or `minor` / `major`) from a clean,
+up-to-date `main` checkout to bump and push a release tag. The release workflow
+publishes to npm and, for stable tags, uses GitHub's generated release notes and
+Git history to create a GitHub release and update [CHANGELOG.md](CHANGELOG.md)
+on `main`. The changelog includes merged PRs as well as direct commits. Allow
+Actions to write repository contents; if the changelog push races with another
+update to `main`, re-run the failed workflow. Prerelease tags do not update it.
+
+To regenerate locally, fetch all history and tags, authenticate the GitHub CLI,
+and run `node scripts/changelog.mjs`. Add `--release vX.Y.Z` to create a
+missing GitHub release without changing an existing release's notes.
