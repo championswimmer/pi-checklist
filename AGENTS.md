@@ -45,7 +45,6 @@ pi-checklist/
 │   ├── store.ts               ← in-memory store, transitions, dependency checks
 │   ├── settings.ts            ← pi-extension-settings-tui schema + layered store
 │   ├── prefs.ts               ← internal global prefs helpers (<agentDir>/pi-checklist.json)
-│   ├── settings-preview.ts    ← themed sample under the shared settings dialog's Preview row
 │   ├── tools.ts               ← checklist_create / checklist_read / checklist_update
 │   ├── render.ts              ← widget, tool renderers, /checklist overlay
 │   ├── add-task-dialog.ts     ← /checklist add dialog (ID / task / dependency picker)
@@ -132,7 +131,7 @@ Display and feature settings are managed by `pi-extension-settings-tui` and pers
 - [x] Independent display toggles (plan 015): `/checklist settings` exposes separate Statusbar widget and Status footer on/off rows. Persisted `displayMode` retains legacy modes and adds `widget-only`; switching a toggle from legacy `end-of-turn` returns to the normal below-editor placement. Quick-set modes remain supported.
 
 - [x] pi-footer compatibility (plan 013): publish the themed compact footer via `ctx.ui.setStatus("checklist", ...)` (no pi-footer events); users add a Pi Extension Status widget with key `checklist` or enable the Pi extensions row. Status groups use semantic theme foreground colors; pi-footer widget color/bold overrides discard embedded colors.
-- [x] Settings migration (plan 002) uses `pi-extension-settings-tui` (`^0.6.0`) for immediate saves, separate widget and footer controls, the themed Preview subroute, and keyboard, fullscreen mouse, and RPC settings. `tests/settings-migration.test.mjs` covers startup migration, project trust, RPC fallback, and reset persistence.
+- [x] Settings migration (plan 002) uses `pi-extension-settings-tui` (`^0.7.0`) for immediate saves, separate widget and footer controls, an inline preview rendered by `previewLines`, and keyboard, fullscreen mouse, and RPC settings. `tests/settings-migration.test.mjs` covers startup migration, project trust, RPC fallback, and reset persistence.
 
 ## Publishing notes
 

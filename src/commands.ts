@@ -10,6 +10,7 @@ import {
   USAGE_LABELS,
   ChecklistOverlay,
   dialogMaxRows,
+  previewLines,
   type RenderOpts,
 } from "./render.js";
 import {
@@ -317,6 +318,10 @@ async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistC
     await openSettingsDialog(ctx, {
       schema: checklistSettingsSchema,
       store,
+      renderPreview: ({ values, theme }) => [
+        theme.fg("accent", theme.bold("Preview")),
+        ...previewLines(theme, { style: values.statusStyle, iconSet: values.iconSet }, values.subtasksEnabled),
+      ],
       onApply: async (next) => {
         await applyValues(next);
       },

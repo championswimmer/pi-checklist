@@ -90,16 +90,13 @@ test("settings dialog renders initial preference and toggles subtasks immediatel
                 const subtasksRow = () =>
                   screen.render(100).find((line) => line.includes("Subtasks")) ?? "";
                 assert.match(subtasksRow(), initial ? /\bOn\b/ : /\bOff\b/);
-                screen.navigateTo({ field: "preview" });
-                screen.handleInput("\r");
-                await flush();
                 const preview = () => screen.render(100).join("\n");
                 assert.match(preview(), /Write the widget/);
                 assert.equal(preview().includes("↳"), initial);
-                screen.handleInput("\u001b");
 
                 screen.navigateTo({ field: "subtasksEnabled" });
                 screen.handleInput(" ");
+                assert.equal(preview().includes("↳"), !initial);
                 await flush();
                 assert.equal(enabled, !initial);
                 assert.match(subtasksRow(), initial ? /\bOff\b/ : /\bOn\b/);
@@ -108,14 +105,8 @@ test("settings dialog renders initial preference and toggles subtasks immediatel
                 for (const width of [30, 60, 100]) {
                   assert.ok(screen.render(width).every((line) => visibleWidth(line) <= width));
                 }
-                screen.navigateTo({ field: "preview" });
-                screen.handleInput("\r");
-                await flush();
-                assert.equal(preview().includes("↳"), !initial);
-                screen.handleInput("\u001b");
-
-                screen.navigateTo({ field: "subtasksEnabled" });
                 screen.handleInput(" ");
+                assert.equal(preview().includes("↳"), initial);
                 await flush();
                 assert.match(subtasksRow(), initial ? /\bOn\b/ : /\bOff\b/);
                 assert.deepEqual(persisted, [!initial, initial]);

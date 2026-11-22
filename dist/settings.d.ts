@@ -20,11 +20,6 @@ export declare const checklistSettingsSchema: import("pi-extension-settings-tui/
     usage: import("pi-extension-settings-tui/schema").EnumFieldDef<"moderate" | "aggressive", any>;
     subtasksEnabled: import("pi-extension-settings-tui/schema").BooleanFieldDef<any>;
     metaEnabled: import("pi-extension-settings-tui/schema").BooleanFieldDef<any>;
-    preview: import("pi-extension-settings-tui/schema").ExternalFieldDef<{
-        statusStyle: StatusStyle;
-        iconSet: IconSet;
-        subtasksEnabled: boolean;
-    }>;
 }>;
 export type ChecklistSettings = typeof checklistSettingsSchema.Type;
 export type ChecklistSettingsStore = SettingsStore<typeof checklistSettingsSchema.fields>;

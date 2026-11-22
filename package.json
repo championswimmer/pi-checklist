@@ -33,7 +33,7 @@
     ]
   },
   "dependencies": {
-    "pi-extension-settings-tui": "^0.6.0"
+    "pi-extension-settings-tui": "^0.7.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
