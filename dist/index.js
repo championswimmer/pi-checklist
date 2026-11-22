@@ -1,6 +1,7 @@
+import { ConcurrencyConflictError } from "pi-extension-settings-tui/store";
 import { registerChecklistCommand } from "./commands.js";
-import { loadGlobalPrefs, saveGlobalPrefs } from "./prefs.js";
 import { footerText, paintWidget, renderChecklistResult, renderCreateCall, renderReadCall, renderUpdateCall, } from "./render.js";
+import { createChecklistSettingsStore, isProjectTrusted, loadChecklistSettings, loadEffectiveSettingsSync, patchChecklistSettings, preferencesForSettings, settingsForPreferences, } from "./settings.js";
 import { MAX_CHECKLIST_TASKS, MAX_SUBTASKS_PER_TASK, addTask, buildInjectSnippet, loadFromBranch, resolveDisplayMode, resolveIconSet, resolveMetaEnabled, resolveStatusStyle, resolveSubtasksEnabled, resolveUsage } from "./store.js";
 import { CREATE_GUIDELINES, CREATE_SNIPPET, ChecklistCreateParams, ChecklistReadParams, ChecklistUpdateParams, READ_GUIDELINES, READ_SNIPPET, UPDATE_GUIDELINES, UPDATE_SNIPPET, executeCreate, executeRead, executeUpdate, } from "./tools.js";
 const WIDGET_KEY = "checklist";
@@ -8,26 +9,23 @@ const STATUS_KEY = "checklist";
 const CUSTOM_TYPE = "pi-checklist";
 export default function (pi) {
     // In-memory cache; the session JSONL branch is the source of truth for
-    // tasks, the global prefs file (`<agentDir>/pi-checklist.json`) is the
-    // source of truth for display settings (seeded here so even
-    // session-less/print use honors them).
-    const globalSeed = loadGlobalPrefs();
+    // tasks, and `pi-extension-settings-tui` (`<agentDir>/pi-checklist.json` +
+    // trusted `<cwd>/.pi/pi-checklist.json`) is the source of truth for settings
+    // (seeded synchronously here so even session-less/print use honors globals).
+    const seeded = preferencesForSettings(loadEffectiveSettingsSync());
     let state = {
         v: 1,
         checklist: null,
-        widgetVisible: (globalSeed.displayMode ?? "statusbar") !== "hidden",
-        displayMode: globalSeed.displayMode ?? "statusbar",
-        statusStyle: globalSeed.statusStyle ?? "pill",
-        iconSet: globalSeed.iconSet ?? "nerd-font",
-        usage: globalSeed.usage ?? "moderate",
-        subtasksEnabled: globalSeed.subtasksEnabled ?? false,
-        metaEnabled: globalSeed.metaEnabled ?? false,
+        widgetVisible: seeded.displayMode !== "hidden",
+        ...seeded,
     };
     // The usage-guidance hint is baked into the system prompt, so it is
-    // captured ONCE here at extension load. setUsage below still persists the
-    // new value (snapshot + global prefs), but the injected hint keeps using
-    // this capture until the extension is reloaded (/reload / new session).
-    const usageGuidanceAtLoad = resolveUsage(state);
+    // captured at load time (and refreshed on session_start to honor
+    // trusted project overrides). Mid-session edits persist immediately, but the
+    // injected hint keeps using this capture until `/reload` or a new session.
+    let usageGuidanceAtLoad = resolveUsage(state);
+    let legacyPreferences;
+    const getSettingsStore = (ctx) => createChecklistSettingsStore({ cwd: ctx.cwd }, legacyPreferences);
     // True between turn_start and turn_end/agent_settled. In "end-of-turn"
     // mode the widget stays hidden mid-turn and appears when the turn settles.
     let inTurn = false;
@@ -88,51 +86,89 @@ export default function (pi) {
         persistSnapshot(snapshot);
         refreshUi(ctx);
     }
-    /** Write the current display prefs to the global file (best-effort). */
-    function savePrefs() {
-        saveGlobalPrefs({
-            displayMode: getDisplayMode(),
-            statusStyle: getStatusStyle(),
-            iconSet: getIconSet(),
-            usage: getUsage(),
-            subtasksEnabled: getSubtasksEnabled(),
-            metaEnabled: getMetaEnabled(),
-        });
+    /** Apply resolved settings to live state, session snapshot, and TUI. */
+    function applySettingsToState(next, ctx, persistSession = true) {
+        state = {
+            ...state,
+            widgetVisible: next.displayMode !== "hidden",
+            ...next,
+        };
+        if (persistSession)
+            persistSnapshot(state);
+        refreshUi(ctx);
     }
-    function reconstruct(ctx) {
+    /** Patch one or more settings in-memory, session snapshot, UI, and settings store. */
+    async function updateSettings(patch, ctx) {
+        const store = getSettingsStore(ctx);
+        const trustedProject = isProjectTrusted(ctx);
+        try {
+            const loaded = await patchChecklistSettings(store, patch, { trustedProject });
+            applySettingsToState(preferencesForSettings(loaded.effective), ctx);
+        }
+        catch (err) {
+            if (err instanceof ConcurrencyConflictError) {
+                const latest = await store.load({ trustedProject });
+                applySettingsToState(preferencesForSettings(latest.effective), ctx, false);
+                throw err;
+            }
+            // Keep quick-set usable in ephemeral and read-only sessions.
+            applySettingsToState({
+                displayMode: getDisplayMode(),
+                statusStyle: getStatusStyle(),
+                iconSet: getIconSet(),
+                usage: getUsage(),
+                subtasksEnabled: getSubtasksEnabled(),
+                metaEnabled: getMetaEnabled(),
+                ...patch,
+            }, ctx);
+            if (ctx.hasUI)
+                ctx.ui.notify("Checklist settings changed for this session. Could not save all changes.", "warning");
+        }
+    }
+    async function reconstruct(ctx, isSessionStart = false) {
+        let branchState = { v: 1, checklist: null };
         try {
             const branch = ctx.sessionManager.getBranch();
-            const loaded = loadFromBranch(branch);
-            // Tasks come from the branch; prefs prefer the global file (so a
-            // setting changed in another session isn't clobbered by resuming an
-            // older session), falling back to the snapshot for back-compat.
-            const global = loadGlobalPrefs();
-            // Normalize: carry the resolved prefs explicitly so future snapshots
-            // (and legacy entries without them) stay consistent.
-            state = {
-                ...loaded,
-                displayMode: global.displayMode ?? resolveDisplayMode(loaded),
-                statusStyle: global.statusStyle ?? resolveStatusStyle(loaded),
-                iconSet: global.iconSet ?? resolveIconSet(loaded),
-                usage: global.usage ?? resolveUsage(loaded),
-                subtasksEnabled: global.subtasksEnabled ?? resolveSubtasksEnabled(loaded),
-                metaEnabled: global.metaEnabled ?? resolveMetaEnabled(loaded),
-            };
+            branchState = loadFromBranch(branch);
         }
         catch {
-            const global = loadGlobalPrefs();
-            state = {
-                v: 1,
-                checklist: null,
-                displayMode: global.displayMode ?? "statusbar",
-                statusStyle: global.statusStyle ?? "pill",
-                iconSet: global.iconSet ?? "nerd-font",
-                usage: global.usage ?? "moderate",
-                subtasksEnabled: global.subtasksEnabled ?? false,
-                metaEnabled: global.metaEnabled ?? false,
-            };
+            // Ephemeral contexts may have no branch.
         }
-        refreshUi(ctx);
+        legacyPreferences = {
+            displayMode: resolveDisplayMode(branchState),
+            statusStyle: resolveStatusStyle(branchState),
+            iconSet: resolveIconSet(branchState),
+            usage: resolveUsage(branchState),
+            subtasksEnabled: resolveSubtasksEnabled(branchState),
+            metaEnabled: resolveMetaEnabled(branchState),
+        };
+        let settings;
+        try {
+            // Migrate real files against real layers. The session fallback is not
+            // written until the user explicitly saves global settings.
+            const trustedProject = isProjectTrusted(ctx);
+            const store = createChecklistSettingsStore({ cwd: ctx.cwd });
+            const loaded = await loadChecklistSettings(store, trustedProject, isSessionStart);
+            settings = loaded.snapshot.globalHash === null
+                ? store.schema.resolveEffective({
+                    global: settingsForPreferences(legacyPreferences),
+                    project: loaded.layers.project,
+                }, { includeProject: trustedProject })
+                : loaded.effective;
+            if (isSessionStart && ctx.hasUI) {
+                for (const warning of loaded.warnings) {
+                    ctx.ui.notify(`checklist settings: ${warning}`, "warning");
+                }
+            }
+        }
+        catch {
+            // Global preferences are still available if project settings fail.
+            settings = loadEffectiveSettingsSync();
+        }
+        if (isSessionStart)
+            usageGuidanceAtLoad = settings.usage;
+        state = branchState;
+        applySettingsToState(preferencesForSettings(settings), ctx, false);
     }
     // -- tools ---------------------------------------------------------------
     pi.registerTool({
@@ -196,49 +232,20 @@ export default function (pi) {
             return result;
         },
         getDisplayMode,
-        setDisplayMode: (mode, ctx) => {
-            state = { ...state, displayMode: mode, widgetVisible: mode !== "hidden" };
-            persistSnapshot(state);
-            savePrefs();
-            refreshUi(ctx);
-        },
+        setDisplayMode: (mode, ctx) => updateSettings({ displayMode: mode }, ctx),
         getStatusStyle,
-        setStatusStyle: (style, ctx) => {
-            state = { ...state, statusStyle: style };
-            persistSnapshot(state);
-            savePrefs();
-            refreshUi(ctx);
-        },
+        setStatusStyle: (style, ctx) => updateSettings({ statusStyle: style }, ctx),
         getIconSet,
-        setIconSet: (iconSet, ctx) => {
-            state = { ...state, iconSet };
-            persistSnapshot(state);
-            savePrefs();
-            refreshUi(ctx);
-        },
+        setIconSet: (iconSet, ctx) => updateSettings({ iconSet }, ctx),
         getUsage,
-        setUsage: (usage, ctx) => {
-            // Persisted now (snapshot + global prefs), but the injected system
-            // prompt keeps the load-time capture until the extension reloads.
-            state = { ...state, usage };
-            persistSnapshot(state);
-            savePrefs();
-            refreshUi(ctx);
-        },
+        setUsage: (usage, ctx) => updateSettings({ usage }, ctx),
         getSubtasksEnabled,
-        setSubtasksEnabled: (enabled, ctx) => {
-            state = { ...state, subtasksEnabled: enabled };
-            persistSnapshot(state);
-            savePrefs();
-            refreshUi(ctx);
-        },
+        setSubtasksEnabled: (enabled, ctx) => updateSettings({ subtasksEnabled: enabled }, ctx),
         getMetaEnabled,
-        setMetaEnabled: (enabled, ctx) => {
-            state = { ...state, metaEnabled: enabled };
-            persistSnapshot(state);
-            savePrefs();
-            refreshUi(ctx);
-        },
+        setMetaEnabled: (enabled, ctx) => updateSettings({ metaEnabled: enabled }, ctx),
+        applySettingsPatch: updateSettings,
+        syncSettings: (next, ctx) => applySettingsToState(preferencesForSettings(next), ctx),
+        getSettingsStore,
         getRenderOpts,
         clear: (ctx) => {
             state = {
@@ -258,8 +265,8 @@ export default function (pi) {
         getChecklist: () => state.checklist,
     });
     // -- session + turn lifecycle ----------------------------------------------
-    pi.on("session_start", async (_event, ctx) => reconstruct(ctx));
-    pi.on("session_tree", async (_event, ctx) => reconstruct(ctx));
+    pi.on("session_start", async (_event, ctx) => reconstruct(ctx, true));
+    pi.on("session_tree", async (_event, ctx) => reconstruct(ctx, false));
     pi.on("turn_start", async (_event, ctx) => {
         inTurn = true;
         refreshUi(ctx);

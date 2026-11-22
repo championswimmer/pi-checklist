@@ -143,8 +143,9 @@ function mount(checklist, { id = "xyz", title, maxRows, current = () => checklis
     { style: "icon", iconSet: "emoji" },
   );
   const type = (text) => [...text].forEach((ch) => dialog.handleInput(ch));
-  // Strip SGR (the Input's reverse-video cursor) but keep the zero-width cursor marker intact.
-  const text = (width = 70) => dialog.render(width).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+  // Strip SGR and fake-cursor APC markers, keeping the zero-width hardware cursor marker intact.
+  const text = (width = 70) =>
+    dialog.render(width).join("\n").replace(/\x1b\[[0-9;]*m/g, "").replace(/\x1b_pi:\/?fc\x07/g, "");
   return { dialog, submitted, type, text, closed: () => closed, renders: () => renders };
 }
 

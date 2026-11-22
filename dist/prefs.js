@@ -1,81 +1,42 @@
 /**
- * Global display prefs for pi-checklist.
+ * Global display prefs helpers for pi-checklist.
  *
- * Checklist *tasks* stay session-scoped (session JSONL branch), but the
- * *display settings* (displayMode / statusStyle / iconSet) persist across
- * all sessions in `<agentDir>/pi-checklist.json`.
- *
- * Agent-dir resolution mirrors pi's own `getAgentDir()` (see pi docs
- * `environment-variables.md` and `dist/config.js`): the
- * `PI_CODING_AGENT_DIR` env var wins, otherwise `~/.pi/agent`.
- * No runtime imports from pi packages — `node:os`/`node:path` only.
+ * Backed by `pi-extension-settings-tui` (`checklistSettingsSchema` + hardened
+ * atomic JSON I/O). Keeps the exported `GlobalPrefs` / `resolveAgentDir` /
+ * `prefsFilePath` / `loadGlobalPrefs` / `saveGlobalPrefs` surface backwards
+ * compatible for callers and tests.
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { isDisplayMode, isIconSet, isStatusStyle, isUsageMode } from "./types.js";
-const PREFS_FILE = "pi-checklist.json";
+import * as path from "node:path";
+import { resolveDefaultAgentDir, resolveScopeFilePath, writeJsonFileHardened, } from "pi-extension-settings-tui/store";
+import { checklistSettingsSchema, displayModeForSettings, loadGlobalLayerSync, settingsForPreferences, } from "./settings.js";
 /** Resolve the pi agent dir: `PI_CODING_AGENT_DIR` or `~/.pi/agent`. */
 export function resolveAgentDir() {
-    const raw = process.env.PI_CODING_AGENT_DIR;
-    if (raw && raw.trim().length > 0)
-        return expandPath(raw.trim());
-    return join(homedir(), ".pi", "agent");
-}
-function expandPath(p) {
-    if (p === "~")
-        return homedir();
-    if (p.startsWith("~/"))
-        return join(homedir(), p.slice(2));
-    return p;
+    return resolveDefaultAgentDir();
 }
 /** Absolute path of the global prefs file (overridable dir for tests). */
 export function prefsFilePath(agentDir = resolveAgentDir()) {
-    return join(agentDir, PREFS_FILE);
+    return resolveScopeFilePath(checklistSettingsSchema, "global", { agentDir });
 }
 /** Load global prefs; `{}` when missing, corrupt, or unreadable. */
 export function loadGlobalPrefs(agentDir) {
-    let raw;
-    try {
-        raw = readFileSync(prefsFilePath(agentDir ?? resolveAgentDir()), "utf-8");
+    const { widgetDisplay, footerEnabled, ...rest } = loadGlobalLayerSync(agentDir);
+    const prefs = rest;
+    if (widgetDisplay !== undefined || footerEnabled !== undefined) {
+        const defaults = checklistSettingsSchema.getDefaults();
+        prefs.displayMode = displayModeForSettings({
+            widgetDisplay: widgetDisplay ?? defaults.widgetDisplay,
+            footerEnabled: footerEnabled ?? defaults.footerEnabled,
+        });
     }
-    catch {
-        return {};
-    }
-    let parsed;
-    try {
-        parsed = JSON.parse(raw);
-    }
-    catch {
-        return {};
-    }
-    if (typeof parsed !== "object" || parsed === null)
-        return {};
-    const v = parsed;
-    const out = {};
-    if (isDisplayMode(v.displayMode))
-        out.displayMode = v.displayMode;
-    if (isStatusStyle(v.statusStyle))
-        out.statusStyle = v.statusStyle;
-    if (isIconSet(v.iconSet))
-        out.iconSet = v.iconSet;
-    if (isUsageMode(v.usage))
-        out.usage = v.usage;
-    if (typeof v.subtasksEnabled === "boolean")
-        out.subtasksEnabled = v.subtasksEnabled;
-    if (typeof v.metaEnabled === "boolean")
-        out.metaEnabled = v.metaEnabled;
-    return out;
+    return prefs;
 }
 /** Save global prefs (best-effort, silent fail for ephemeral/read-only sessions). */
 export function saveGlobalPrefs(prefs, agentDir) {
     try {
-        const dir = agentDir ?? resolveAgentDir();
-        mkdirSync(dir, { recursive: true });
-        const file = join(dir, PREFS_FILE);
-        const tmp = `${file}.${process.pid}.tmp`;
-        writeFileSync(tmp, JSON.stringify({ v: 1, ...prefs }, null, 2) + "\n", "utf-8");
-        renameSync(tmp, file);
+        const dir = path.resolve(agentDir ?? resolveAgentDir());
+        const file = resolveScopeFilePath(checklistSettingsSchema, "global", { agentDir: dir });
+        const validated = checklistSettingsSchema.validatePartial(settingsForPreferences(prefs)).values;
+        writeJsonFileHardened(file, validated, { baseRoot: dir });
     }
     catch {
         // Global prefs are a convenience — never break a turn for them.
