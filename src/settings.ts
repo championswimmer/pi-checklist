@@ -18,7 +18,6 @@ import {
   type SettingsStore,
   type SettingsStoreOptions,
 } from "pi-extension-settings-tui/store";
-import { checklistPreviewField } from "./settings-preview.js";
 import { isDisplayMode, type DisplayMode, type IconSet, type StatusStyle, type UsageMode } from "./types.js";
 
 export const CHECKLIST_SETTINGS_FILE = "pi-checklist.json";
@@ -215,7 +214,6 @@ export const checklistSettingsSchema = defineSettings({
       default: false,
       experimental: true,
     }),
-    preview: checklistPreviewField,
   },
 });
 

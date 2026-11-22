@@ -8,7 +8,6 @@
 import * as path from "node:path";
 import { defineSettings, field } from "pi-extension-settings-tui/schema";
 import { createJsonFileStorageAdapter, createSettingsStore, readJsonFileHardened, resolveDefaultAgentDir, resolveScopeFilePath, stripSecretKeys, } from "pi-extension-settings-tui/store";
-import { checklistPreviewField } from "./settings-preview.js";
 import { isDisplayMode } from "./types.js";
 export const CHECKLIST_SETTINGS_FILE = "pi-checklist.json";
 const displaySettings = {
@@ -193,7 +192,6 @@ export const checklistSettingsSchema = defineSettings({
             default: false,
             experimental: true,
         }),
-        preview: checklistPreviewField,
     },
 });
 export function createChecklistSettingsStore(options, legacyPreferences) {

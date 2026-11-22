@@ -1,6 +1,6 @@
 import { openSettingsDialog } from "pi-extension-settings-tui/adapter";
 import { AddTaskDialog } from "./add-task-dialog.js";
-import { DIALOG_MAX_HEIGHT_PERCENT, DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, dialogMaxRows, } from "./render.js";
+import { DIALOG_MAX_HEIGHT_PERCENT, DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, STATUS_STYLE_DESCRIPTIONS, USAGE_LABELS, ChecklistOverlay, dialogMaxRows, previewLines, } from "./render.js";
 import { checklistSettingsSchema, createChecklistSettingsStore, preferencesForSettings, } from "./settings.js";
 import { MAX_CHECKLIST_TASKS, suggestTaskId } from "./store.js";
 import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, } from "./types.js";
@@ -248,6 +248,10 @@ async function openSettingsScreen(ctx, deps) {
         await openSettingsDialog(ctx, {
             schema: checklistSettingsSchema,
             store,
+            renderPreview: ({ values, theme }) => [
+                theme.fg("accent", theme.bold("Preview")),
+                ...previewLines(theme, { style: values.statusStyle, iconSet: values.iconSet }, values.subtasksEnabled),
+            ],
             onApply: async (next) => {
                 await applyValues(next);
             },

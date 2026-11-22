@@ -51,7 +51,7 @@ Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `d
 
 A session checklist holds at most **10 tasks**. The live TUI widget shows the **top 5** prioritized tasks (with an overflow hint when needed) plus a `☑ n/m` footer; `/checklist` (or `/checklist show`) opens a centered dialog with **all** tasks (`/checklist clear` empties the list, `/checklist add` adds a task by hand — see below). `/checklist settings` opens an interactive settings dialog (powered by [pi-extension-settings-tui](https://github.com/championswimmer/pi-extension-settings-tui), with keyboard, fullscreen mouse, RPC menu fallback, and Global/Project scope overrides), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
 
-Use **Statusbar widget** and **Status footer** in `/checklist settings` to control the widget and footer separately. In the TUI, the **Preview** row opens a sample with the selected progress style, icons, and subtasks setting. The display shortcuts are listed below.
+Use **Statusbar widget** and **Status footer** in `/checklist settings` to control the widget and footer separately. In the TUI, the inline **Preview** updates as you change the progress style, icons, or subtasks setting. The display shortcuts are listed below.
 
 - `statusbar` — persistent widget below the input box + compact footer summary (default).
 - `widget-only` — persistent widget below the input box without footer.
