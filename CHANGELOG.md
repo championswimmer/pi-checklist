@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.1.0 (2026-11-22)
+
+### What's Changed
+* Restore the inline Checklist settings preview by @championswimmer in https://github.com/championswimmer/pi-checklist/pull/8
+
+
+**Full Changelog**: https://github.com/championswimmer/pi-checklist/compare/v4.0.0...v4.1.0
+
+### Commits
+
+- release v4.1.0 ([150c088](https://github.com/championswimmer/pi-checklist/commit/150c0889bfe681dbedc53e4fca07c91950872f4f))
+- feat: restore the inline Checklist settings preview (#8) ([891745a](https://github.com/championswimmer/pi-checklist/commit/891745acce082d3d13c7293c245ff9acdbc255a4))
+- docs: update changelog [skip ci] ([371f8b7](https://github.com/championswimmer/pi-checklist/commit/371f8b7d59ebe6a2398b32ec6452e7c69f648bc0))
+
 ## v4.0.0 (2026-11-22)
 
 ### What's Changed
