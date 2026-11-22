@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { initTheme } from "@earendil-works/pi-coding-agent";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { registerChecklistCommand } from "../dist/commands.js";
 import { glyphFor, previewLines } from "../dist/render.js";
+import { createChecklistSettingsStore } from "../dist/settings.js";
 
 const theme = { fg: (_color, text) => text, bg: (_color, text) => text, bold: (text) => text };
 
@@ -36,50 +39,94 @@ for (const style of ["color", "pill", "icon"]) {
   }
 }
 
-test("settings renders initial preference and toggles demo children immediately", async () => {
-  // SettingsList's theme factory requires Pi's active theme, like the real TUI.
-  initTheme();
+test("settings dialog renders initial preference and toggles subtasks immediately", async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
+  const keybindings = { matches: () => false };
+
   for (const initial of [false, true]) {
-    let enabled = initial;
-    let screen;
-    let requests = 0;
-    const persisted = [];
-    let command;
-    registerChecklistCommand({ registerCommand: (_name, value) => { command = value; } }, {
-      getDisplayMode: () => "statusbar",
-      getStatusStyle: () => "icon",
-      getIconSet: () => "emoji",
-      getUsage: () => "moderate",
-      getSubtasksEnabled: () => enabled,
-      setSubtasksEnabled: (value) => { enabled = value; persisted.push(value); },
-      getMetaEnabled: () => false,
-      setMetaEnabled() {},
-      getChecklist: () => { throw new Error("Settings preview must not read session tasks"); },
-    });
-    await command.handler("settings", {
-      hasUI: true,
-      mode: "tui",
-      ui: {
-        notify() {},
-        custom: async (factory) => {
-          screen = factory({ requestRender: () => { requests++; } }, theme, {}, () => {});
+    const dir = mkdtempSync(join(tmpdir(), "checklist-settings-dialog-"));
+    try {
+      const store = createChecklistSettingsStore({ agentDir: dir, cwd: dir });
+      await store.patch(
+        { statusStyle: "icon", iconSet: "emoji", subtasksEnabled: initial },
+        { scope: "global", trustedProject: false },
+      );
+      let enabled = initial;
+      let requests = 0;
+      const persisted = [];
+      let command;
+      registerChecklistCommand({ registerCommand: (_name, value) => { command = value; } }, {
+        getDisplayMode: () => "statusbar",
+        setDisplayMode() {},
+        getStatusStyle: () => "icon",
+        setStatusStyle() {},
+        getIconSet: () => "emoji",
+        setIconSet() {},
+        getUsage: () => "moderate",
+        setUsage() {},
+        getSubtasksEnabled: () => enabled,
+        setSubtasksEnabled: (value) => { enabled = value; persisted.push(value); },
+        getMetaEnabled: () => false,
+        setMetaEnabled() {},
+        getSettingsStore: () => store,
+        getChecklist: () => { throw new Error("Settings dialog must not read session tasks"); },
+      });
+
+      await command.handler("settings", {
+        hasUI: true,
+        mode: "tui",
+        cwd: dir,
+        ui: {
+          notify() {},
+          custom: async (factory) =>
+            new Promise((resolve) => {
+              const screen = factory(
+                { requestRender: () => { requests++; }, terminal: { rows: 40 }, mode: "regular" },
+                theme,
+                keybindings,
+                (res) => resolve(res),
+              );
+              void (async () => {
+                const subtasksRow = () =>
+                  screen.render(100).find((line) => line.includes("Subtasks")) ?? "";
+                assert.match(subtasksRow(), initial ? /\bOn\b/ : /\bOff\b/);
+                screen.navigateTo({ field: "preview" });
+                screen.handleInput("\r");
+                await flush();
+                const preview = () => screen.render(100).join("\n");
+                assert.match(preview(), /Write the widget/);
+                assert.equal(preview().includes("↳"), initial);
+                screen.handleInput("\u001b");
+
+                screen.navigateTo({ field: "subtasksEnabled" });
+                screen.handleInput(" ");
+                await flush();
+                assert.equal(enabled, !initial);
+                assert.match(subtasksRow(), initial ? /\bOff\b/ : /\bOn\b/);
+                screen.invalidate();
+                assert.match(subtasksRow(), initial ? /\bOff\b/ : /\bOn\b/);
+                for (const width of [30, 60, 100]) {
+                  assert.ok(screen.render(width).every((line) => visibleWidth(line) <= width));
+                }
+                screen.navigateTo({ field: "preview" });
+                screen.handleInput("\r");
+                await flush();
+                assert.equal(preview().includes("↳"), !initial);
+                screen.handleInput("\u001b");
+
+                screen.navigateTo({ field: "subtasksEnabled" });
+                screen.handleInput(" ");
+                await flush();
+                assert.match(subtasksRow(), initial ? /\bOn\b/ : /\bOff\b/);
+                assert.deepEqual(persisted, [!initial, initial]);
+                assert.ok(requests >= 2);
+                screen.handleInput("\u001b");
+              })();
+            }),
         },
-      },
-    });
-    const children = () => screen.render(100).filter((line) => line.includes("↳"));
-    assert.equal(children().length, initial ? 3 : 0);
-    for (let i = 0; i < 5; i++) screen.handleInput("\u001b[B");
-    screen.handleInput(" ");
-    assert.equal(enabled, !initial);
-    assert.equal(children().length, initial ? 0 : 3);
-    screen.invalidate();
-    assert.equal(children().length, initial ? 0 : 3);
-    for (const width of [30, 60, 100]) {
-      assert.ok(screen.render(width).every((line) => visibleWidth(line) <= width));
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
-    screen.handleInput(" ");
-    assert.equal(children().length, initial ? 3 : 0);
-    assert.deepEqual(persisted, [!initial, initial]);
-    assert.equal(requests, 2);
   }
 });

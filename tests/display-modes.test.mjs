@@ -3,7 +3,6 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { initTheme } from "@earendil-works/pi-coding-agent";
 
 import extension from "../dist/index.js";
 import { normalizeDisplayMode, parseChecklistArgs } from "../dist/commands.js";
@@ -80,28 +79,60 @@ test("minimal mode persists globally and remains footer-only across turns and sw
       await events.get(event)({}, ctx);
       assertMinimal();
     }
-    initTheme();
-    let screen;
-    ctx.ui.custom = async (factory) => { screen = factory({ requestRender() {} }, { fg: (_c, s) => s, bg: (_c, s) => s, bold: (s) => s }, {}, () => {}); };
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 10));
+    const keybindings = { matches: () => false };
+    const plainTheme = { fg: (_c, s) => s, bg: (_c, s) => s, bold: (s) => s };
+    let driveDialog;
+    ctx.ui.custom = async (factory) =>
+      new Promise((resolve) => {
+        const comp = factory(
+          { requestRender() {}, terminal: { rows: 40 }, mode: "regular" },
+          plainTheme,
+          keybindings,
+          (res) => resolve(res),
+        );
+        void driveDialog(comp);
+      });
+    driveDialog = async (screen) => {
+      assert.match(screen.render(100).join("\n"), /Statusbar widget/);
+      // Enable the widget while leaving the footer on.
+      screen.handleInput("\u001b[D");
+      await flush();
+      assert.equal(typeof widget, "function");
+      assert.ok(status);
+
+      // Disable the footer without changing the widget.
+      screen.handleInput("\u001b[B");
+      screen.handleInput(" ");
+      await flush();
+      assert.equal(typeof widget, "function");
+      assert.equal(status, undefined);
+      assert.equal(loadGlobalPrefs().displayMode, "widget-only");
+
+      screen.handleInput("\u001b[A");
+      screen.handleInput("\u001b[C");
+      await flush();
+      assert.equal(widget, undefined);
+      assert.equal(status, undefined);
+
+      screen.handleInput("\u001b[B");
+      screen.handleInput(" ");
+      await flush();
+      assertMinimal();
+
+      // Leave the dialog in widget-only mode.
+      screen.handleInput(" ");
+      await flush();
+      screen.handleInput("\u001b[A");
+      screen.handleInput("\u001b[D");
+      await flush();
+      screen.handleInput("\u001b");
+    };
     await command.handler("settings", ctx);
-    screen.handleInput(" "); // widget on, footer remains on
-    assert.equal(typeof widget, "function");
-    assert.ok(status);
-    screen.handleInput("\u001b[B");
-    screen.handleInput(" "); // footer off, widget remains on
-    assert.equal(typeof widget, "function");
-    assert.equal(status, undefined);
     assert.equal(loadGlobalPrefs().displayMode, "widget-only");
     await events.get("session_tree")({}, ctx);
     assert.equal(typeof widget, "function");
     assert.equal(status, undefined);
-    screen.handleInput("\u001b[A");
-    screen.handleInput(" "); // both off
-    assert.equal(widget, undefined);
-    assert.equal(status, undefined);
-    screen.handleInput("\u001b[B");
-    screen.handleInput(" "); // footer only
-    assertMinimal();
     await command.handler("settings statusbar", ctx);
     assert.equal(typeof widget, "function");
     assert.equal(status, footerText(checklist, opts, ctx.ui.theme));

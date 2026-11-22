@@ -35,6 +35,8 @@ Implemented; see the usage and development sections below.
 
 ## Usage
 
+Checklist 4.0 requires Pi 1.5.0 or newer and Node.js 22.19.0 or newer. Existing settings are converted in place when Checklist starts. The global settings path stays `<agentDir>/pi-checklist.json`.
+
 The agent gets three tools:
 
 | Tool | Purpose |
@@ -47,11 +49,15 @@ Each task gets a **3-character alphanumeric id** (FNV-1a hash of the title, e.g.
 
 Status machine: `planned` → `ongoing` / `done` / `cancelled`, `ongoing` → `done` / `cancelled` / `planned`, `cancelled` → `planned`. `done` is terminal in v1.
 
-A session checklist holds at most **10 tasks**. The live TUI widget shows the **top 5** prioritized tasks (with an overflow hint when needed) plus a `☑ n/m` footer; `/checklist` (or `/checklist show`) opens a centered dialog with **all** tasks (`/checklist clear` empties the list, `/checklist add` adds a task by hand — see below). `/checklist settings` opens one screen for every display preference (with a live preview), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
+A session checklist holds at most **10 tasks**. The live TUI widget shows the **top 5** prioritized tasks (with an overflow hint when needed) plus a `☑ n/m` footer; `/checklist` (or `/checklist show`) opens a centered dialog with **all** tasks (`/checklist clear` empties the list, `/checklist add` adds a task by hand — see below). `/checklist settings` opens an interactive settings dialog (powered by [pi-extension-settings-tui](https://github.com/championswimmer/pi-extension-settings-tui), with keyboard, fullscreen mouse, RPC menu fallback, and Global/Project scope overrides), or quick-set them inline, e.g. `/checklist settings end-of-turn pill emoji moderate`:
 
-Display controls: **Statusbar widget** and **Status footer** can each be switched on or off independently in `/checklist settings`. Both are on by default. The widget appears below the input box; the footer shows only the compact summary. Both off hides the display without affecting `/checklist`.
+Use **Statusbar widget** and **Status footer** in `/checklist settings` to control the widget and footer separately. In the TUI, the **Preview** row opens a sample with the selected progress style, icons, and subtasks setting. The display shortcuts are listed below.
 
-The legacy quick-set modes remain available: `statusbar` (both), `widget-only` (widget only), `status-minimal` (footer only), `hidden` (neither), and `end-of-turn` (widget above the input box when the turn settles, plus footer). Changing either toggle from `end-of-turn` uses the normal below-editor widget placement.
+- `statusbar` — persistent widget below the input box + compact footer summary (default).
+- `widget-only` — persistent widget below the input box without footer.
+- `status-minimal` — compact progress summary in the footer only (no task widget).
+- `end-of-turn` — widget above the input box when each turn settles, plus footer.
+- `hidden` — neither widget nor footer (open `/checklist` on demand).
 
 Both summaries use a checkmark, done/total ratio, then icon counts for done, ongoing, ready, blocked and cancelled, e.g. `☑️ 2/5 ✅ 2 🔄 3`. Zero-count states are hidden. They honor your Nerd Font / emoji setting regardless of task-row style; the footer omits the checklist title. Cancelled tasks don't count toward the progress denominator.
 
@@ -77,7 +83,7 @@ Usage guidance is baked into the system prompt, so it is captured once when the 
 
 Subtasks (preview):
 
-- Enable with `/checklist settings subtasks` (off with `/checklist settings no-subtasks`); the settings screen has a matching `Subtasks (preview)` toggle.
+- Enable with `/checklist settings subtasks` (off with `/checklist settings no-subtasks`), or use the **Subtasks** toggle.
 - Each task holds at most **3 subtasks** (fixed cap, like the 10-task limit). Subtasks are born `planned` and run the same status machine as tasks.
 - A subtask's `dependsOn` may name only **siblings inside the same parent task**.
 - In the `/checklist` dialog, tasks open **collapsed**; press **→** (or `l`) on a task with subtasks to expand it and **←** (or `h`) to collapse (works from a subtask row too).
@@ -86,7 +92,7 @@ Subtasks (preview):
 Task meta (preview):
 
 - Free-form key/value facts on a task or subtask — e.g. `{ "agent": "impl-auth", "pr": 42 }` — so the agent (or another extension driving the same tools) can tag work. No namespaces, claims or special API: it is just a flat `meta` object.
-- Enable with `/checklist settings meta` (off with `/checklist settings no-meta`); the settings screen has a matching `Task meta (preview)` toggle. It persists like the other settings and applies immediately; while it is on, the system prompt tells the agent how to use meta.
+- Enable with `/checklist settings meta` (off with `/checklist settings no-meta`), or use the **Task meta** toggle. The change applies immediately. While it is on, the system prompt tells the agent how to use meta.
 - **Create:** `checklist_create` tasks (and subtasks) accept `meta: { key: value }`.
 - **Update:** `checklist_update` entries (and subtask patches) take `meta`, which is **merged** into the existing meta — listed keys are set/overwritten, unlisted keys stay, and `key: null` deletes that key. Deleting the last key removes `meta`.
 - Values are `string` (≤ 200 chars), finite `number` or `boolean`; keys are 1–40 chars; at most 10 keys per task. Anything else (objects, arrays) is rejected. `null` only means "delete" in updates (it is skipped on create).
@@ -109,7 +115,9 @@ Validation is deliberately basic: the id must be 3 characters from `a–z` / `0�
 
 `/checklist add <text>` pre-fills the task text. Without a TUI (print mode) the dialog is unavailable, so `/checklist add <text>` adds the task directly with an autogenerated id and no dependencies.
 
-State lives in the session JSONL (tool-result `details` + `pi.appendEntry`), so it survives `/resume`, `/branch`, `/undo`, and compaction. Display settings (`displayMode` / `statusStyle` / `iconSet` / `usage` / `subtasksEnabled` / `metaEnabled`) additionally persist globally in `<agentDir>/pi-checklist.json` (agent dir = `$PI_CODING_AGENT_DIR` or `~/.pi/agent`), so they carry across sessions; the task list itself stays session-scoped.
+Checklist tasks live in the session JSONL and survive `/resume`, `/branch`, `/undo`, and compaction. Settings persist in `<agentDir>/pi-checklist.json` (Global, with agent dir set by `$PI_CODING_AGENT_DIR` or defaulting to `~/.pi/agent`) and optionally in `<cwd>/.pi/pi-checklist.json` (Project, when trusted).
+
+On upgrade, Checklist converts legacy `displayMode` to `widgetDisplay` and `footerEnabled` in the same file. `widgetDisplay` accepts `"persistent"`, `"off"`, or `"end-of-turn"`, and `footerEnabled` is a boolean. The other setting keys keep their existing values. Files store overrides, so default settings can be omitted.
 
 ## Install
 

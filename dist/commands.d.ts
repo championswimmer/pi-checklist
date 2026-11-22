@@ -1,6 +1,7 @@
 /** /checklist command: overlay + settings (display / style / icons / usage) + show/hide/clear. */
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { type RenderOpts } from "./render.js";
+import { type ChecklistPreferences, type ChecklistSettings, type ChecklistSettingsStore } from "./settings.js";
 import { type AddTaskDraft, type AddTaskResult } from "./store.js";
 import { type DisplayMode, type IconSet, type StatusStyle, type UsageMode } from "./types.js";
 export type ChecklistAction = {
@@ -44,17 +45,23 @@ export interface ChecklistCommandDeps {
     /** Validate against the live checklist and, when fine, append + persist + refresh the UI. */
     addTask: (draft: AddTaskDraft, ctx: ExtensionCommandContext) => AddTaskResult;
     getDisplayMode: () => DisplayMode;
-    setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
+    setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void | Promise<void>;
     getStatusStyle: () => StatusStyle;
-    setStatusStyle: (style: StatusStyle, ctx: ExtensionCommandContext) => void;
+    setStatusStyle: (style: StatusStyle, ctx: ExtensionCommandContext) => void | Promise<void>;
     getIconSet: () => IconSet;
-    setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void;
+    setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void | Promise<void>;
     getUsage: () => UsageMode;
-    setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void;
+    setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void | Promise<void>;
     getSubtasksEnabled: () => boolean;
-    setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
+    setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void | Promise<void>;
     getMetaEnabled: () => boolean;
-    setMetaEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
+    setMetaEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void | Promise<void>;
+    /** Optional atomic patch for quick-set commands (`/checklist settings <tokens...>`). */
+    applySettingsPatch?: (patch: Partial<ChecklistPreferences>, ctx: ExtensionCommandContext) => void | Promise<void>;
+    /** Sync in-memory state + session snapshot + UI after `openSettingsDialog` persists changes. */
+    syncSettings?: (next: ChecklistSettings, ctx: ExtensionCommandContext) => void;
+    /** Optional settings store factory (defaults to `createChecklistSettingsStore({ cwd: ctx.cwd })`). */
+    getSettingsStore?: (ctx: ExtensionCommandContext) => ChecklistSettingsStore;
     getRenderOpts: () => RenderOpts;
     clear: (ctx: ExtensionCommandContext) => void;
     getChecklist: () => import("./types.js").Checklist | null;

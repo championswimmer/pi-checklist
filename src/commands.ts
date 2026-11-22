@@ -1,31 +1,31 @@
 /** /checklist command: overlay + settings (display / style / icons / usage) + show/hide/clear. */
-import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
-import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
-import { Container, SettingsList, Text, type SettingItem } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { openSettingsDialog } from "pi-extension-settings-tui/adapter";
 import { AddTaskDialog } from "./add-task-dialog.js";
 import {
   DIALOG_MAX_HEIGHT_PERCENT,
-  DISPLAY_MODE_DESCRIPTIONS,
   DISPLAY_MODE_LABELS,
   ICON_SET_DESCRIPTIONS,
   STATUS_STYLE_DESCRIPTIONS,
-  USAGE_DESCRIPTIONS,
   USAGE_LABELS,
   ChecklistOverlay,
   dialogMaxRows,
-  frameDialog,
-  previewLines,
   type RenderOpts,
 } from "./render.js";
+import {
+  checklistSettingsSchema,
+  createChecklistSettingsStore,
+  preferencesForSettings,
+  type ChecklistPreferences,
+  type ChecklistSettings,
+  type ChecklistSettingsStore,
+} from "./settings.js";
 import { MAX_CHECKLIST_TASKS, suggestTaskId, type AddTaskDraft, type AddTaskResult } from "./store.js";
 import {
   DISPLAY_MODES,
   ICON_SETS,
   STATUS_STYLES,
   USAGE_MODES,
-  isIconSet,
-  isStatusStyle,
-  isUsageMode,
   type DisplayMode,
   type IconSet,
   type StatusStyle,
@@ -164,7 +164,7 @@ export const CHECKLIST_USAGE =
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */
 async function openChecklistDialog(
   ctx: ExtensionCommandContext,
-  deps: Pick<ChecklistCommandDeps, "getChecklist" | "getRenderOpts" | "getDisplayMode" | "setDisplayMode" | "getStatusStyle" | "setStatusStyle" | "getIconSet" | "setIconSet" | "getUsage" | "setUsage" | "getSubtasksEnabled" | "setSubtasksEnabled" | "getMetaEnabled" | "setMetaEnabled" | "clear">,
+  deps: ChecklistCommandDeps,
 ): Promise<void> {
   if (ctx.mode !== "tui" || !ctx.hasUI) {
     // No popup surface in print mode — fall back to a text summary.
@@ -206,7 +206,7 @@ async function openChecklistDialog(
     { overlay: true, overlayOptions: { width: "70%", maxHeight: `${DIALOG_MAX_HEIGHT_PERCENT}%`, anchor: "center" } },
   );
   if (goSettings) {
-    await openSettingsScreen(ctx, deps as ChecklistCommandDeps);
+    await openSettingsScreen(ctx, deps);
   }
 }
 
@@ -214,17 +214,23 @@ export interface ChecklistCommandDeps {
   /** Validate against the live checklist and, when fine, append + persist + refresh the UI. */
   addTask: (draft: AddTaskDraft, ctx: ExtensionCommandContext) => AddTaskResult;
   getDisplayMode: () => DisplayMode;
-  setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void;
+  setDisplayMode: (mode: DisplayMode, ctx: ExtensionCommandContext) => void | Promise<void>;
   getStatusStyle: () => StatusStyle;
-  setStatusStyle: (style: StatusStyle, ctx: ExtensionCommandContext) => void;
+  setStatusStyle: (style: StatusStyle, ctx: ExtensionCommandContext) => void | Promise<void>;
   getIconSet: () => IconSet;
-  setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void;
+  setIconSet: (iconSet: IconSet, ctx: ExtensionCommandContext) => void | Promise<void>;
   getUsage: () => UsageMode;
-  setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void;
+  setUsage: (usage: UsageMode, ctx: ExtensionCommandContext) => void | Promise<void>;
   getSubtasksEnabled: () => boolean;
-  setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
+  setSubtasksEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void | Promise<void>;
   getMetaEnabled: () => boolean;
-  setMetaEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void;
+  setMetaEnabled: (enabled: boolean, ctx: ExtensionCommandContext) => void | Promise<void>;
+  /** Optional atomic patch for quick-set commands (`/checklist settings <tokens...>`). */
+  applySettingsPatch?: (patch: Partial<ChecklistPreferences>, ctx: ExtensionCommandContext) => void | Promise<void>;
+  /** Sync in-memory state + session snapshot + UI after `openSettingsDialog` persists changes. */
+  syncSettings?: (next: ChecklistSettings, ctx: ExtensionCommandContext) => void;
+  /** Optional settings store factory (defaults to `createChecklistSettingsStore({ cwd: ctx.cwd })`). */
+  getSettingsStore?: (ctx: ExtensionCommandContext) => ChecklistSettingsStore;
   getRenderOpts: () => RenderOpts;
   clear: (ctx: ExtensionCommandContext) => void;
   getChecklist: () => import("./types.js").Checklist | null;
@@ -281,164 +287,44 @@ async function runAddTask(ctx: ExtensionCommandContext, deps: ChecklistCommandDe
   if (added) ctx.ui.notify(describe(added), "info");
 }
 
-/** One interactive screen for every checklist display preference, with a live preview. */
+/** Interactive settings dialog powered by `pi-extension-settings-tui` (TUI + RPC + headless). */
 async function openSettingsScreen(ctx: ExtensionCommandContext, deps: ChecklistCommandDeps): Promise<void> {
-  await ctx.ui.custom<void>((tui, theme, _kb, done) => {
-    let display = deps.getDisplayMode();
-    let style = deps.getStatusStyle();
-    let icons = deps.getIconSet();
-    let usage = deps.getUsage();
-    let subtasks = deps.getSubtasksEnabled() ? "on" : "off";
-    let meta = deps.getMetaEnabled() ? "on" : "off";
-
-    const previewTitle = new Text(theme.fg("accent", theme.bold("Preview")), 1, 0);
-    const previewBody = new Text("", 1, 0);
-    const repaintPreview = (th: Theme) => {
-      previewBody.setText(previewLines(th, { style, iconSet: icons }, subtasks === "on").join("\n"));
-    };
-    // Small hint under the icons row: Nerd Font glyphs need a patched font.
-    // Shown only while the nerd-font set is selected.
-    const nfHint = new Text("", 1, 0);
-    const repaintHint = (th: Theme) => {
-      nfHint.setText(
-        icons === "nerd-font"
-          ? th.fg("dim", "Tip: install a Nerd Font patched font (nerdfonts.com) to see these symbols.")
-          : "",
+  const store = deps.getSettingsStore?.(ctx) ?? createChecklistSettingsStore({ cwd: ctx.cwd });
+  let lastUsage = deps.getUsage();
+  const applyValues = async (next: ChecklistSettings): Promise<void> => {
+    const usageChanged = next.usage !== lastUsage;
+    lastUsage = next.usage;
+    if (deps.syncSettings) {
+      deps.syncSettings(next, ctx);
+    } else {
+      const { displayMode } = preferencesForSettings(next);
+      if (displayMode !== deps.getDisplayMode()) await deps.setDisplayMode(displayMode, ctx);
+      if (next.statusStyle !== deps.getStatusStyle()) await deps.setStatusStyle(next.statusStyle, ctx);
+      if (next.iconSet !== deps.getIconSet()) await deps.setIconSet(next.iconSet, ctx);
+      if (next.usage !== deps.getUsage()) await deps.setUsage(next.usage, ctx);
+      if (next.subtasksEnabled !== deps.getSubtasksEnabled()) await deps.setSubtasksEnabled(next.subtasksEnabled, ctx);
+      if (next.metaEnabled !== deps.getMetaEnabled()) await deps.setMetaEnabled(next.metaEnabled, ctx);
+    }
+    if (usageChanged) {
+      ctx.ui.notify(
+        `checklist usage guidance: ${USAGE_LABELS[next.usage]} (takes effect after /reload or a new session)`,
+        "info",
       );
-    };
+    }
+  };
 
-    const items: SettingItem[] = [
-      {
-        id: "widget",
-        label: "Statusbar widget",
-        currentValue: display === "hidden" || display === "status-minimal" ? "off" : "on",
-        values: ["off", "on"],
-        description: "Show the task widget below the input box.",
+  try {
+    await openSettingsDialog(ctx, {
+      schema: checklistSettingsSchema,
+      store,
+      onApply: async (next) => {
+        await applyValues(next);
       },
-      {
-        id: "footer",
-        label: "Status footer",
-        currentValue: display === "hidden" || display === "widget-only" ? "off" : "on",
-        values: ["off", "on"],
-        description: "Show the compact progress summary in the footer.",
-      },
-      {
-        id: "status",
-        label: "Progress style",
-        currentValue: style,
-        values: [...STATUS_STYLES],
-        description: "color: rows only · pill: status on a colored background · icon: icon only",
-      },
-      {
-        id: "icons",
-        label: "Progress icons",
-        currentValue: icons,
-        values: [...ICON_SETS],
-        description: "nerd-font needs a Nerd Font patched font; emoji works anywhere (icon style only)",
-      },
-      {
-        id: "usage",
-        label: "Usage guidance",
-        currentValue: usage,
-        values: [...USAGE_MODES],
-        description:
-          "moderate: long-running / multi-step work only · aggressive: almost every task · changes the system prompt — takes effect after reload (/reload or a new session)",
-      },
-      {
-        id: "subtasks",
-        label: "Subtasks (preview)",
-        currentValue: subtasks,
-        values: ["off", "on"],
-        description:
-          "preview: nested subtasks inside tasks (at most 3 per task, sibling-only dependsOn)",
-      },
-      {
-        id: "meta",
-        label: "Task meta (preview)",
-        currentValue: meta,
-        values: ["off", "on"],
-        description:
-          "preview: key/value meta on tasks (set on create, merge on update, null deletes); shown in the /checklist dialog",
-      },
-    ];
-
-    // Dialog chrome is drawn by frameDialog (rounded box + title in the top
-    // border) in render() below — pi-tui has no bordered-box component, so
-    // dialogs draw their own border.
-    const container = new Container();
-
-    const list = new SettingsList(
-      items,
-      7,
-      getSettingsListTheme(),
-      (id, newValue) => {
-        if ((id === "widget" || id === "footer") && (newValue === "on" || newValue === "off")) {
-          const widget = id === "widget" ? newValue === "on" : display !== "hidden" && display !== "status-minimal";
-          const footer = id === "footer" ? newValue === "on" : display !== "hidden" && display !== "widget-only";
-          display = widget ? (footer ? "statusbar" : "widget-only") : (footer ? "status-minimal" : "hidden");
-          deps.setDisplayMode(display, ctx);
-          ctx.ui.notify(`checklist ${id}: ${newValue}`, "info");
-        } else if (id === "status" && isStatusStyle(newValue)) {
-          style = newValue;
-          deps.setStatusStyle(newValue, ctx);
-          ctx.ui.notify(`checklist progress style: ${STATUS_STYLE_DESCRIPTIONS[newValue]}`, "info");
-        } else if (id === "icons" && isIconSet(newValue)) {
-          icons = newValue;
-          deps.setIconSet(newValue, ctx);
-          ctx.ui.notify(`checklist icons: ${ICON_SET_DESCRIPTIONS[newValue]}`, "info");
-        } else if (id === "usage" && isUsageMode(newValue)) {
-          usage = newValue;
-          deps.setUsage(newValue, ctx);
-          // This setting is baked into the system prompt at load time —
-          // make the delayed-apply contract explicit in the notification.
-          ctx.ui.notify(
-            `checklist usage guidance: ${USAGE_LABELS[newValue]} (takes effect after /reload or a new session)`,
-            "info",
-          );
-        } else if (id === "subtasks" && (newValue === "on" || newValue === "off")) {
-          subtasks = newValue;
-          deps.setSubtasksEnabled(newValue === "on", ctx);
-          ctx.ui.notify(`checklist subtasks (preview): ${newValue}`, "info");
-        } else if (id === "meta" && (newValue === "on" || newValue === "off")) {
-          meta = newValue;
-          deps.setMetaEnabled(newValue === "on", ctx);
-          ctx.ui.notify(`checklist task meta (preview): ${newValue}`, "info");
-        }
-        repaintPreview(theme);
-        repaintHint(theme);
-        tui.requestRender();
-      },
-      () => done(undefined),
-    );
-    container.addChild(list);
-    container.addChild(nfHint);
-    container.addChild(previewTitle);
-    container.addChild(previewBody);
-    container.addChild(new Text(theme.fg("dim", "↑↓ navigate · enter/space change · esc done"), 1, 0));
-    repaintPreview(theme);
-    repaintHint(theme);
-
-    return {
-      render: (width: number) => {
-        const innerW = Math.max(1, width - 2);
-        return frameDialog("Checklist settings", container.render(innerW), width, theme);
-      },
-      invalidate: () => {
-        container.invalidate();
-        repaintPreview(theme);
-        repaintHint(theme);
-      },
-      handleInput: (data) => {
-        list.handleInput(data);
-      },
-    };
-  },
-  {
-    // Centered overlay modal (like the checklist dialog): the transcript
-    // stays visible and keeps streaming behind the dialog while it is open.
-    overlay: true,
-    overlayOptions: { width: "70%", maxHeight: "70%", anchor: "center" },
-  });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.ui.notify(`checklist settings error: ${message}`, "error");
+  }
 }
 
 export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistCommandDeps): void {
@@ -461,14 +347,14 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
     handler: async (args: string, ctx: ExtensionCommandContext) => {
       const action = parseChecklistArgs(args);
       if (action.name === "hide") {
-        deps.setDisplayMode("hidden", ctx);
+        await deps.setDisplayMode("hidden", ctx);
         ctx.ui.notify("checklist hidden (/checklist show to restore)", "info");
         return;
       }
       if (action.name === "show") {
         // "show" pops the checklist dialog; also restore the widget if hidden.
         if (deps.getDisplayMode() === "hidden") {
-          deps.setDisplayMode("statusbar", ctx);
+          await deps.setDisplayMode("statusbar", ctx);
         }
         await openChecklistDialog(ctx, deps);
         return;
@@ -488,31 +374,42 @@ export function registerChecklistCommand(pi: ExtensionAPI, deps: ChecklistComman
       }
       if (action.name === "settings") {
         const applied: string[] = [];
+        const patch: Partial<ChecklistPreferences> = {};
         if (action.displayMode) {
-          deps.setDisplayMode(action.displayMode, ctx);
+          patch.displayMode = action.displayMode;
           applied.push(DISPLAY_MODE_LABELS[action.displayMode]);
         }
         if (action.statusStyle) {
-          deps.setStatusStyle(action.statusStyle, ctx);
+          patch.statusStyle = action.statusStyle;
           applied.push(STATUS_STYLE_DESCRIPTIONS[action.statusStyle]);
         }
         if (action.iconSet) {
-          deps.setIconSet(action.iconSet, ctx);
+          patch.iconSet = action.iconSet;
           applied.push(ICON_SET_DESCRIPTIONS[action.iconSet]);
         }
         if (action.usage) {
-          deps.setUsage(action.usage, ctx);
+          patch.usage = action.usage;
           applied.push(USAGE_LABELS[action.usage]);
         }
         if (action.subtasksEnabled !== undefined) {
-          deps.setSubtasksEnabled(action.subtasksEnabled, ctx);
+          patch.subtasksEnabled = action.subtasksEnabled;
           applied.push(`Subtasks (preview): ${action.subtasksEnabled ? "on" : "off"}`);
         }
         if (action.metaEnabled !== undefined) {
-          deps.setMetaEnabled(action.metaEnabled, ctx);
+          patch.metaEnabled = action.metaEnabled;
           applied.push(`Task meta (preview): ${action.metaEnabled ? "on" : "off"}`);
         }
         if (applied.length > 0) {
+          if (deps.applySettingsPatch) {
+            await deps.applySettingsPatch(patch, ctx);
+          } else {
+            if (patch.displayMode !== undefined) await deps.setDisplayMode(patch.displayMode, ctx);
+            if (patch.statusStyle !== undefined) await deps.setStatusStyle(patch.statusStyle, ctx);
+            if (patch.iconSet !== undefined) await deps.setIconSet(patch.iconSet, ctx);
+            if (patch.usage !== undefined) await deps.setUsage(patch.usage, ctx);
+            if (patch.subtasksEnabled !== undefined) await deps.setSubtasksEnabled(patch.subtasksEnabled, ctx);
+            if (patch.metaEnabled !== undefined) await deps.setMetaEnabled(patch.metaEnabled, ctx);
+          }
           if (action.usage) {
             ctx.ui.notify(
               `checklist settings: ${applied.join(" · ")} (usage guidance takes effect after /reload or a new session)`,

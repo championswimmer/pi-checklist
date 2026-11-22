@@ -43,7 +43,9 @@ pi-checklist/
 │   ├── index.ts               ← extension entry (export default function)
 │   ├── types.ts               ← Task / Checklist / status types
 │   ├── store.ts               ← in-memory store, transitions, dependency checks
-│   ├── prefs.ts               ← global display prefs (<agentDir>/pi-checklist.json)
+│   ├── settings.ts            ← pi-extension-settings-tui schema + layered store
+│   ├── prefs.ts               ← internal global prefs helpers (<agentDir>/pi-checklist.json)
+│   ├── settings-preview.ts    ← themed sample under the shared settings dialog's Preview row
 │   ├── tools.ts               ← checklist_create / checklist_read / checklist_update
 │   ├── render.ts              ← widget, tool renderers, /checklist overlay
 │   ├── add-task-dialog.ts     ← /checklist add dialog (ID / task / dependency picker)
@@ -69,7 +71,7 @@ Pi docs live in the installed package, not this repo (path depends on the instal
 - Extensions are TypeScript files executed via jiti — **no build step**. Type-only imports are erased.
 - Entry point: `export default function (pi: ExtensionAPI) { ... }`.
 - Available imports without installing deps: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`, `typebox`. Import **types only** from pi packages when possible — runtime imports of pi internals are fragile.
-- For a distributable package, list those four in `peerDependencies` with `"*"` and put any real runtime deps in `dependencies`. Add `"keywords": ["pi-package"]`.
+- The Pi packages and TypeBox are peers. Checklist 4 requires `@earendil-works/pi-coding-agent >=1.5.0` and Node.js >=22.19.0. The settings library is a runtime dependency.
 - Local testing: `pi -e ./dist/index.js` (built output, what ships) or `pi -e ./src/index.ts` (sources, no rebuild). Rebuild with `npm run build` before testing dist. Auto-discovery: symlink into `~/.pi/agent/extensions/` (global, `/reload`) or `.pi/extensions/` (project-local, needs trust).
 - Install as a package: `pi install git:github.com/championswimmer/pi-checklist` or `pi install npm:pi-checklist` once published.
 
@@ -84,7 +86,7 @@ Write a versioned snapshot (`{ v: 1, checklist, widgetVisible }`) in two places 
 
 Reconstruct tasks by walking `ctx.sessionManager.getBranch()` oldest → newest; last matching snapshot wins. **Never `getEntries()`** (that mixes other branches). Re-run on `session_start` (`/resume`) and `session_tree` (`/branch`, `/undo`). Compaction appends a summary; it does not delete old lines, so `getBranch()` still sees the snapshot. The LLM may forget it — re-inject a compact snippet on `before_agent_start`.
 
-Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in `<agentDir>/pi-checklist.json` (`src/prefs.ts`): agent dir = `$PI_CODING_AGENT_DIR` else `~/.pi/agent` (tilde-expanded), mirroring pi's own `getAgentDir()` (`docs/environment-variables.md`, `dist/config.js`). Validate with `isDisplayMode`/`isStatusStyle`/`isIconSet`; silent fail on read/write. Precedence on reconstruct: global file > branch snapshot > defaults. Settings setters write both session snapshot and global file; task mutations touch only the session.
+Display and feature settings are managed by `pi-extension-settings-tui` and persist as overrides in `<agentDir>/pi-checklist.json` (Global, with agent dir set by `$PI_CODING_AGENT_DIR` or defaulting to `~/.pi/agent`) and `<cwd>/.pi/pi-checklist.json` (Project, only when `ctx.isProjectTrusted()`). On session start, the schema migrates legacy `displayMode` or `widgetVisible` to `widgetDisplay` and `footerEnabled` and drops the v1 marker. When no global file exists, settings from older session snapshots can supply the global fallback. Resetting global settings leaves an empty file to keep older snapshots from restoring the cleared settings. Session snapshots and command shortcuts still use the original display-mode names.
 
 ### TUI surfaces we will use
 
@@ -130,6 +132,7 @@ Display settings (`displayMode`/`statusStyle`/`iconSet`) persist **globally** in
 - [x] Independent display toggles (plan 015): `/checklist settings` exposes separate Statusbar widget and Status footer on/off rows. Persisted `displayMode` retains legacy modes and adds `widget-only`; switching a toggle from legacy `end-of-turn` returns to the normal below-editor placement. Quick-set modes remain supported.
 
 - [x] pi-footer compatibility (plan 013): publish the themed compact footer via `ctx.ui.setStatus("checklist", ...)` (no pi-footer events); users add a Pi Extension Status widget with key `checklist` or enable the Pi extensions row. Status groups use semantic theme foreground colors; pi-footer widget color/bold overrides discard embedded colors.
+- [x] Settings migration (plan 002) uses `pi-extension-settings-tui` (`^0.6.0`) for immediate saves, separate widget and footer controls, the themed Preview subroute, and keyboard, fullscreen mouse, and RPC settings. `tests/settings-migration.test.mjs` covers startup migration, project trust, RPC fallback, and reset persistence.
 
 ## Publishing notes
 
