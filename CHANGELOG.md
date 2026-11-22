@@ -1,5 +1,20 @@
 # Changelog
 
+## v4.0.0 (2026-11-22)
+
+### What's Changed
+* Migrate Checklist to shared settings for v4.0.0 by @championswimmer in https://github.com/championswimmer/pi-checklist/pull/7
+
+
+**Full Changelog**: https://github.com/championswimmer/pi-checklist/compare/v3.3.0...v4.0.0
+
+### Commits
+
+- feat!: migrate Checklist to shared settings (#7) ([30f423c](https://github.com/championswimmer/pi-checklist/commit/30f423c24a9a00601f827ffbe4be8f72bddd4db0))
+- feat: generate changelog and GitHub releases ([9556f79](https://github.com/championswimmer/pi-checklist/commit/9556f79925b63c692c78f6777f220039cbf32e46))
+- Update related Pi extension badges ([8325b23](https://github.com/championswimmer/pi-checklist/commit/8325b235e58cfc4587838809e919e25ca73e22cf))
+- docs: add npm badges ([de625b4](https://github.com/championswimmer/pi-checklist/commit/de625b4b01aaa15f8e209e1c2270037693377be5))
+
 ## v3.3.0 (2026-11-08)
 
 ### What's Changed
