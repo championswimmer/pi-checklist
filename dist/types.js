@@ -1,4 +1,3 @@
-/** Shared types for pi-checklist. Pure — no pi imports. */
 export const DISPLAY_MODES = ["statusbar", "widget-only", "status-minimal", "end-of-turn", "hidden"];
 export function isDisplayMode(value) {
     return value === "statusbar" || value === "widget-only" || value === "status-minimal" || value === "end-of-turn" || value === "hidden";
@@ -15,7 +14,6 @@ export const USAGE_MODES = ["moderate", "aggressive"];
 export function isUsageMode(value) {
     return value === "moderate" || value === "aggressive";
 }
-/** Tool names that can carry a ChecklistSnapshot in result details. */
 export const CHECKLIST_TOOLS = new Set([
     "checklist_create",
     "checklist_read",

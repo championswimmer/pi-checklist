@@ -1,27 +1,17 @@
 import { Input, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { colorFor, DEFAULT_RENDER_OPTS, frameDialog, glyphFor, statusKindOf } from "./render.js";
 import { suggestTaskId, viewsOf } from "./store.js";
-/** Rows the dialog uses besides the picker's task rows are counted at render
- * time; this is only the frame (top + bottom border). */
 const FRAME_ROWS = 2;
-const LABEL_WIDTH = 10; // "Depends on"
-/** marker (2) + label + space, inside the 1-col left pad. */
+const LABEL_WIDTH = 10;
 const PREFIX_WIDTH = 1 + 2 + LABEL_WIDTH + 1;
-/** Keep only what a task id may contain: lowercase a–z / 0–9, at most 3 chars. */
 export function sanitizeIdInput(raw) {
     return raw.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 3);
 }
-/** Replace an Input's text and leave the cursor at the end (setValue alone keeps it at 0). */
 function fillInput(input, text) {
     input.setValue("");
     if (text !== "")
         input.handleInput(`\x1b[200~${text}\x1b[201~`);
 }
-/**
- * The add-task dialog: ID field, Task field, and a checkbox picker over the
- * existing tasks for `dependsOn`. Keyboard only (see `hintFor`). Validation is
- * delegated to `onSubmit` (the store), which checks against the live checklist.
- */
 export class AddTaskDialog {
     items;
     theme;
@@ -32,9 +22,7 @@ export class AddTaskDialog {
     titleInput;
     picked = new Set();
     focus = "title";
-    /** Highlighted picker row. */
     cursor = 0;
-    /** First visible picker row when the list is taller than the dialog. */
     scrollTop = 0;
     errors = {};
     hostFocused = false;
@@ -49,7 +37,6 @@ export class AddTaskDialog {
         fillInput(this.titleInput, (initial.title ?? "").replace(/[\r\n]+/g, " ").trim());
         this.syncFocus();
     }
-    // -- Focusable: forward the host's focus to the visible text input (IME cursor) --
     get focused() {
         return this.hostFocused;
     }
@@ -61,8 +48,6 @@ export class AddTaskDialog {
         this.idInput.focused = this.hostFocused && this.focus === "id";
         this.titleInput.focused = this.hostFocused && this.focus === "title";
     }
-    // -- state helpers ----------------------------------------------------------
-    /** Field order for Tab / arrows; the picker is skipped when there is nothing to pick. */
     fields() {
         return this.items.length > 0 ? ["id", "title", "deps"] : ["id", "title"];
     }
@@ -93,7 +78,6 @@ export class AddTaskDialog {
             return;
         }
         this.errors = result.errors;
-        // Jump to the first field with a problem.
         if (result.errors.id)
             this.setFocus("id");
         else if (result.errors.title)
@@ -102,7 +86,6 @@ export class AddTaskDialog {
             this.setFocus("deps");
         this.cb.requestRender();
     }
-    // -- input ------------------------------------------------------------------
     handleInput(data) {
         if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
             this.cb.onClose();
@@ -151,7 +134,6 @@ export class AddTaskDialog {
             this.cb.requestRender();
             return;
         }
-        // Text fields: ↑/↓ move between fields, everything else edits the text.
         if (matchesKey(data, "up")) {
             this.moveFocus(-1, false);
             this.cb.requestRender();
@@ -166,7 +148,7 @@ export class AddTaskDialog {
             this.idInput.handleInput(data);
             const clean = sanitizeIdInput(this.idInput.getValue());
             if (clean !== this.idInput.getValue())
-                this.idInput.setValue(clean); // cursor is clamped to the new length
+                this.idInput.setValue(clean);
             this.errors = { ...this.errors, id: undefined };
         }
         else {
@@ -175,7 +157,6 @@ export class AddTaskDialog {
         }
         this.cb.requestRender();
     }
-    // -- render -----------------------------------------------------------------
     hintFor() {
         if (this.focus === "deps")
             return "↑/↓ move · Space toggle · Tab next · Enter add task · Esc cancel";
@@ -202,7 +183,6 @@ export class AddTaskDialog {
         const innerW = Math.max(1, width - 2);
         const fieldW = Math.max(1, innerW - PREFIX_WIDTH - 1);
         const lines = [];
-        // ID: a 3-char input (+ cursor cell) followed by a dim hint.
         const idCells = Math.min(4, fieldW);
         const idText = this.focus === "id"
             ? this.idInput.render(idCells)[0]
@@ -210,7 +190,6 @@ export class AddTaskDialog {
         const idHint = fieldW > idCells + 2 ? truncateToWidth(th.fg("dim", "  3 chars: a–z, 0–9 · Ctrl+R new"), fieldW - idCells, "") : "";
         lines.push(this.label("ID", "id") + idText + idHint);
         lines.push(...this.errorLines(this.errors.id, innerW));
-        // Task text.
         const titleText = this.focus === "title"
             ? this.titleInput.render(fieldW)[0]
             : this.titleInput.getValue() !== ""
@@ -219,7 +198,6 @@ export class AddTaskDialog {
         lines.push(this.label("Task", "title") + titleText);
         lines.push(...this.errorLines(this.errors.title, innerW));
         lines.push("");
-        // Dependencies header (+ scroll range, filled once the window is known).
         const headerIdx = lines.push("") - 1;
         const tail = [];
         tail.push(...this.errorLines(this.errors.dependsOn, innerW));
@@ -227,7 +205,6 @@ export class AddTaskDialog {
         tail.push("");
         for (const l of wrapTextWithAnsi(th.fg("dim", this.hintFor()), Math.max(1, innerW - 2)))
             tail.push(`  ${l}`);
-        // Picker rows, windowed to whatever height is left.
         const maxRows = this.cb.getMaxRows?.();
         const n = this.items.length;
         const budget = maxRows === undefined ? Number.POSITIVE_INFINITY : Math.max(1, maxRows - FRAME_ROWS - lines.length - tail.length);
@@ -262,6 +239,5 @@ export class AddTaskDialog {
         return frameDialog("Add checklist task", lines, width, th);
     }
     invalidate() {
-        // Rendering is recomputed from state on every call; nothing is cached.
     }
 }

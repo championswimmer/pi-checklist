@@ -1,10 +1,10 @@
 /**
- * Global display prefs helpers for pi-checklist.
+ * Test-only global display prefs helpers for pi-checklist.
  *
  * Backed by `pi-extension-settings-tui` (`checklistSettingsSchema` + hardened
- * atomic JSON I/O). Keeps the exported `GlobalPrefs` / `resolveAgentDir` /
- * `prefsFilePath` / `loadGlobalPrefs` / `saveGlobalPrefs` surface backwards
- * compatible for callers and tests.
+ * atomic JSON I/O). Provides the legacy `resolveAgentDir` / `prefsFilePath` /
+ * `loadGlobalPrefs` / `saveGlobalPrefs` helpers used by test suites without
+ * shipping dead runtime code in `dist/`.
  */
 import * as path from "node:path";
 import {
@@ -17,25 +17,22 @@ import {
   displayModeForSettings,
   loadGlobalLayerSync,
   settingsForPreferences,
-  type ChecklistPreferences,
-} from "./settings.js";
-
-export type GlobalPrefs = Partial<ChecklistPreferences>;
+} from "../../dist/settings.js";
 
 /** Resolve the pi agent dir: `PI_CODING_AGENT_DIR` or `~/.pi/agent`. */
-export function resolveAgentDir(): string {
+export function resolveAgentDir() {
   return resolveDefaultAgentDir();
 }
 
 /** Absolute path of the global prefs file (overridable dir for tests). */
-export function prefsFilePath(agentDir: string = resolveAgentDir()): string {
+export function prefsFilePath(agentDir = resolveAgentDir()) {
   return resolveScopeFilePath(checklistSettingsSchema, "global", { agentDir });
 }
 
 /** Load global prefs; `{}` when missing, corrupt, or unreadable. */
-export function loadGlobalPrefs(agentDir?: string): GlobalPrefs {
+export function loadGlobalPrefs(agentDir) {
   const { widgetDisplay, footerEnabled, ...rest } = loadGlobalLayerSync(agentDir);
-  const prefs: GlobalPrefs = rest;
+  const prefs = rest;
   if (widgetDisplay !== undefined || footerEnabled !== undefined) {
     const defaults = checklistSettingsSchema.getDefaults();
     prefs.displayMode = displayModeForSettings({
@@ -47,12 +44,12 @@ export function loadGlobalPrefs(agentDir?: string): GlobalPrefs {
 }
 
 /** Save global prefs (best-effort, silent fail for ephemeral/read-only sessions). */
-export function saveGlobalPrefs(prefs: GlobalPrefs, agentDir?: string): void {
+export function saveGlobalPrefs(prefs, agentDir) {
   try {
     const dir = path.resolve(agentDir ?? resolveAgentDir());
     const file = resolveScopeFilePath(checklistSettingsSchema, "global", { agentDir: dir });
     const validated = checklistSettingsSchema.validatePartial(settingsForPreferences(prefs)).values;
-    writeJsonFileHardened(file, validated as Record<string, unknown>, { baseRoot: dir });
+    writeJsonFileHardened(file, validated, { baseRoot: dir });
   } catch {
     // Global prefs are a convenience — never break a turn for them.
   }

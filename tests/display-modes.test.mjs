@@ -7,7 +7,7 @@ import { join } from "node:path";
 import extension from "../dist/index.js";
 import { normalizeDisplayMode, parseChecklistArgs } from "../dist/commands.js";
 import { footerText, widgetLines } from "../dist/render.js";
-import { loadGlobalPrefs, saveGlobalPrefs } from "../dist/prefs.js";
+import { loadGlobalPrefs, saveGlobalPrefs } from "./helpers/prefs.mjs";
 import { createOrAppend, resolveDisplayMode } from "../dist/store.js";
 import { DISPLAY_MODES, isDisplayMode } from "../dist/types.js";
 

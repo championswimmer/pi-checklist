@@ -54,7 +54,7 @@ export function normalizeDisplayMode(raw: string): DisplayMode | undefined {
 }
 
 /** Normalize a user-typed style word to a StatusStyle (accepts shorthands). */
-export function normalizeStatusStyle(raw: string): StatusStyle | undefined {
+function normalizeStatusStyle(raw: string): StatusStyle | undefined {
   const word = raw.trim().toLowerCase();
   if (word === "color" || word === "colour" || word === "colors" || word === "colours") return "color";
   if (word === "pill" || word === "pills" || word === "badge" || word === "badges") return "pill";
@@ -63,7 +63,7 @@ export function normalizeStatusStyle(raw: string): StatusStyle | undefined {
 }
 
 /** Normalize a user-typed icon-set word to an IconSet (accepts shorthands). */
-export function normalizeIconSet(raw: string): IconSet | undefined {
+function normalizeIconSet(raw: string): IconSet | undefined {
   const word = raw.trim().toLowerCase().replace(/_/g, "-");
   if (word === "nerd-font" || word === "nerd-fonts" || word === "nerdfont" || word === "nerdfonts" || word === "nerd" || word === "nf") {
     return "nerd-font";
@@ -73,7 +73,7 @@ export function normalizeIconSet(raw: string): IconSet | undefined {
 }
 
 /** Normalize a user-typed usage word to a UsageMode (accepts shorthands). */
-export function normalizeUsageMode(raw: string): UsageMode | undefined {
+function normalizeUsageMode(raw: string): UsageMode | undefined {
   const word = raw.trim().toLowerCase();
   if (word === "moderate" || word === "mod" || word === "m") return "moderate";
   if (word === "aggressive" || word === "aggro" || word === "a") return "aggressive";
@@ -81,7 +81,7 @@ export function normalizeUsageMode(raw: string): UsageMode | undefined {
 }
 
 /** Normalize a user-typed subtasks word to a boolean (preview toggle). */
-export function normalizeSubtasksSetting(raw: string): boolean | undefined {
+function normalizeSubtasksSetting(raw: string): boolean | undefined {
   const word = raw.trim().toLowerCase().replace(/_/g, "-");
   if (word === "subtasks" || word === "subtask" || word === "sub-tasks" || word === "on") return true;
   if (word === "no-subtasks" || word === "nosubtasks" || word === "no-subtask" || word === "off") return false;
@@ -159,7 +159,7 @@ export function parseChecklistArgs(raw: string): ChecklistAction {
   return { name: "help" };
 }
 
-export const CHECKLIST_USAGE =
+const CHECKLIST_USAGE =
   "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|widget-only|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 
 /** Open the checklist in a centered TUI popup dialog (overlay modal). */

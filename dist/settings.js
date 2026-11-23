@@ -1,10 +1,3 @@
-/**
- * Declarative settings schema and layered JSON store for pi-checklist,
- * powered by `pi-extension-settings-tui`.
- *
- * Persists to `<agentDir>/pi-checklist.json` (Global) and
- * `<cwd>/.pi/pi-checklist.json` (Project, when trusted).
- */
 import * as path from "node:path";
 import { defineSettings, field } from "pi-extension-settings-tui/schema";
 import { createJsonFileStorageAdapter, createSettingsStore, readJsonFileHardened, resolveDefaultAgentDir, resolveScopeFilePath, stripSecretKeys, } from "pi-extension-settings-tui/store";
@@ -60,7 +53,6 @@ export const checklistSettingsSchema = defineSettings({
             next.footerEnabled ??= displaySettings[displayMode].footerEnabled;
         }
         else if (displayMode !== undefined) {
-            // Let validation report an invalid legacy setting before any disk rewrite.
             return next;
         }
         delete next.displayMode;
@@ -77,8 +69,6 @@ export const checklistSettingsSchema = defineSettings({
     },
     normalizeDraft: (draft, key) => {
         if (key === "footerEnabled" && draft.widgetDisplay === "end-of-turn") {
-            // Changing the footer from the legacy end-of-turn mode resumes the
-            // persistent widget, as in the old independent switches.
             return { ...draft, widgetDisplay: "persistent" };
         }
         if (key === "widgetDisplay" && draft.widgetDisplay === "end-of-turn") {
@@ -197,8 +187,6 @@ export const checklistSettingsSchema = defineSettings({
 export function createChecklistSettingsStore(options, legacyPreferences) {
     if (options?.adapter)
         return createSettingsStore(checklistSettingsSchema, options);
-    // A global reset leaves an empty file so pre-global snapshots cannot
-    // restore preferences that the user explicitly cleared.
     const global = createJsonFileStorageAdapter(checklistSettingsSchema, { ...options, deleteWhenEmpty: false });
     const project = createJsonFileStorageAdapter(checklistSettingsSchema, { ...options, deleteWhenEmpty: true });
     const legacyOverrides = legacyPreferences && settingsForPreferences(legacyPreferences);
@@ -216,8 +204,6 @@ export function createChecklistSettingsStore(options, legacyPreferences) {
             async readLayer(scope) {
                 const read = await global.readLayer(scope);
                 if (scope === "global" && !read.exists && legacyOverrides) {
-                    // Pre-global Checklist versions kept preferences only in the
-                    // session. Keep the missing file's hash for optimistic writes.
                     return { ...read, exists: true, data: legacyOverrides };
                 }
                 return read;
@@ -226,12 +212,9 @@ export function createChecklistSettingsStore(options, legacyPreferences) {
         },
     });
 }
-/** Check whether a Pi context trusts the current project directory. */
 export function isProjectTrusted(ctx) {
     return typeof ctx?.isProjectTrusted === "function" ? ctx.isProjectTrusted() : false;
 }
-/** Synchronously load the validated global layer from `<agentDir>/pi-checklist.json`.
- * Returns `{}` when missing, corrupt, symlinked, or unreadable. */
 export function loadGlobalLayerSync(agentDir) {
     try {
         const resolvedAgentDir = path.resolve(agentDir ?? resolveDefaultAgentDir());
@@ -250,7 +233,6 @@ export function loadGlobalLayerSync(agentDir) {
         return {};
     }
 }
-/** Synchronously resolve effective global settings (defaults -> global). */
 export function loadEffectiveSettingsSync(agentDir) {
     return checklistSettingsSchema.resolveEffective({ global: loadGlobalLayerSync(agentDir), project: {} }, { includeProject: false });
 }
@@ -262,16 +244,10 @@ export async function loadChecklistSettings(store, trustedProject, migrate) {
         return await store.load({ trustedProject, persistMigration: true });
     }
     catch (err) {
-        // The settings are still usable if the file or directory is read-only.
         const message = err instanceof Error ? err.message : String(err);
         return { ...loaded, warnings: [`Could not rewrite legacy settings: ${message}`] };
     }
 }
-/**
- * Patch one or more checklist settings via `SettingsStore`.
- * Keys currently overridden in a trusted project layer update the project layer
- * so quick-set commands take effect immediately; all other keys update global.
- */
 export async function patchChecklistSettings(store, preferences, options) {
     const { trustedProject } = options;
     let loaded = await store.load({ trustedProject });

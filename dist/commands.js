@@ -4,7 +4,6 @@ import { DIALOG_MAX_HEIGHT_PERCENT, DISPLAY_MODE_LABELS, ICON_SET_DESCRIPTIONS, 
 import { checklistSettingsSchema, createChecklistSettingsStore, preferencesForSettings, } from "./settings.js";
 import { MAX_CHECKLIST_TASKS, suggestTaskId } from "./store.js";
 import { DISPLAY_MODES, ICON_SETS, STATUS_STYLES, USAGE_MODES, } from "./types.js";
-/** Normalize a user-typed mode word to a DisplayMode (accepts shorthands). */
 export function normalizeDisplayMode(raw) {
     const word = raw.trim().toLowerCase().replace(/_/g, "-");
     if (word === "statusbar" || word === "status")
@@ -19,8 +18,7 @@ export function normalizeDisplayMode(raw) {
         return "hidden";
     return undefined;
 }
-/** Normalize a user-typed style word to a StatusStyle (accepts shorthands). */
-export function normalizeStatusStyle(raw) {
+function normalizeStatusStyle(raw) {
     const word = raw.trim().toLowerCase();
     if (word === "color" || word === "colour" || word === "colors" || word === "colours")
         return "color";
@@ -30,8 +28,7 @@ export function normalizeStatusStyle(raw) {
         return "icon";
     return undefined;
 }
-/** Normalize a user-typed icon-set word to an IconSet (accepts shorthands). */
-export function normalizeIconSet(raw) {
+function normalizeIconSet(raw) {
     const word = raw.trim().toLowerCase().replace(/_/g, "-");
     if (word === "nerd-font" || word === "nerd-fonts" || word === "nerdfont" || word === "nerdfonts" || word === "nerd" || word === "nf") {
         return "nerd-font";
@@ -40,8 +37,7 @@ export function normalizeIconSet(raw) {
         return "emoji";
     return undefined;
 }
-/** Normalize a user-typed usage word to a UsageMode (accepts shorthands). */
-export function normalizeUsageMode(raw) {
+function normalizeUsageMode(raw) {
     const word = raw.trim().toLowerCase();
     if (word === "moderate" || word === "mod" || word === "m")
         return "moderate";
@@ -49,8 +45,7 @@ export function normalizeUsageMode(raw) {
         return "aggressive";
     return undefined;
 }
-/** Normalize a user-typed subtasks word to a boolean (preview toggle). */
-export function normalizeSubtasksSetting(raw) {
+function normalizeSubtasksSetting(raw) {
     const word = raw.trim().toLowerCase().replace(/_/g, "-");
     if (word === "subtasks" || word === "subtask" || word === "sub-tasks" || word === "on")
         return true;
@@ -58,8 +53,6 @@ export function normalizeSubtasksSetting(raw) {
         return false;
     return undefined;
 }
-/** Normalize a user-typed meta word to a boolean (preview toggle). Bare
- * on/off stay with subtasks, so meta needs its own words. */
 export function normalizeMetaSetting(raw) {
     const word = raw.trim().toLowerCase().replace(/_/g, "-");
     if (word === "meta" || word === "task-meta")
@@ -80,7 +73,6 @@ export function parseChecklistArgs(raw) {
     if (head === "clear")
         return { name: "clear" };
     if (head === "add") {
-        // Anything after `add` prefills the task text (original casing kept).
         const title = raw.trim().replace(/^add\s*/i, "").trim();
         return title === "" ? { name: "add" } : { name: "add", title };
     }
@@ -134,11 +126,9 @@ export function parseChecklistArgs(raw) {
     }
     return { name: "help" };
 }
-export const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|widget-only|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
-/** Open the checklist in a centered TUI popup dialog (overlay modal). */
+const CHECKLIST_USAGE = "Usage: /checklist [show|hide|clear|add [text]|settings [statusbar|widget-only|status-minimal|end-of-turn|hidden] [color|pill|icon] [nerd-font|emoji] [moderate|aggressive] [subtasks|no-subtasks] [meta|no-meta]]";
 async function openChecklistDialog(ctx, deps) {
     if (ctx.mode !== "tui" || !ctx.hasUI) {
-        // No popup surface in print mode — fall back to a text summary.
         const checklist = deps.getChecklist();
         if (!checklist || checklist.tasks.length === 0) {
             ctx.ui.notify("checklist is empty", "info");
@@ -154,12 +144,7 @@ async function openChecklistDialog(ctx, deps) {
     }
     const checklist = deps.getChecklist();
     const opts = deps.getRenderOpts();
-    // `s` jumps to settings: close this dialog first, then open the settings
-    // screen once the overlay promise settles (avoids nested overlays).
     let goSettings = false;
-    // ctx.ui.custom with overlay:true renders as a floating TUI dialog box
-    // on top of the session (see tui.md "Overlays"). The ChecklistOverlay
-    // component handles j/k + arrows to scroll, s for settings, Esc/q to close.
     await ctx.ui.custom((tui, theme, _kb, done) => {
         return new ChecklistOverlay(checklist, theme, {
             onClose: () => done(),
@@ -168,8 +153,6 @@ async function openChecklistDialog(ctx, deps) {
                 done();
             },
             requestRender: () => tui.requestRender(),
-            // pi-tui slices overlay lines to maxHeight with no scrolling, so the
-            // dialog windows its own rows against the live terminal height.
             getMaxRows: () => dialogMaxRows(tui.terminal.rows),
         }, opts, deps.getMetaEnabled());
     }, { overlay: true, overlayOptions: { width: "70%", maxHeight: `${DIALOG_MAX_HEIGHT_PERCENT}%`, anchor: "center" } });
@@ -177,11 +160,9 @@ async function openChecklistDialog(ctx, deps) {
         await openSettingsScreen(ctx, deps);
     }
 }
-/** Human-readable summary of a failed add (non-dialog paths). */
 function describeAddErrors(errors) {
     return [errors.form, errors.id, errors.title, errors.dependsOn].filter(Boolean).join("; ");
 }
-/** `/checklist add [text]`: dialog in the TUI, direct add (auto id) when there is no dialog surface. */
 async function runAddTask(ctx, deps, title) {
     const checklist = deps.getChecklist();
     const count = checklist?.tasks.length ?? 0;
@@ -215,7 +196,6 @@ async function runAddTask(ctx, deps, title) {
     if (added)
         ctx.ui.notify(describe(added), "info");
 }
-/** Interactive settings dialog powered by `pi-extension-settings-tui` (TUI + RPC + headless). */
 async function openSettingsScreen(ctx, deps) {
     const store = deps.getSettingsStore?.(ctx) ?? createChecklistSettingsStore({ cwd: ctx.cwd });
     let lastUsage = deps.getUsage();
@@ -287,7 +267,6 @@ export function registerChecklistCommand(pi, deps) {
                 return;
             }
             if (action.name === "show") {
-                // "show" pops the checklist dialog; also restore the widget if hidden.
                 if (deps.getDisplayMode() === "hidden") {
                     await deps.setDisplayMode("statusbar", ctx);
                 }
@@ -372,7 +351,6 @@ export function registerChecklistCommand(pi, deps) {
                 ctx.ui.notify(CHECKLIST_USAGE, "warning");
                 return;
             }
-            // open popup dialog (bare /checklist and /checklist show)
             await openChecklistDialog(ctx, deps);
         },
     };

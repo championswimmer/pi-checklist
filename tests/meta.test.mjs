@@ -15,7 +15,7 @@ import {
 import { ChecklistOverlay, widgetLines, footerText, metaRows } from "../dist/render.js";
 import { executeCreate, executeRead, executeUpdate, ChecklistCreateParams, ChecklistUpdateParams } from "../dist/tools.js";
 import { parseChecklistArgs, normalizeMetaSetting } from "../dist/commands.js";
-import { loadGlobalPrefs, saveGlobalPrefs } from "../dist/prefs.js";
+import { loadGlobalPrefs, saveGlobalPrefs } from "./helpers/prefs.mjs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

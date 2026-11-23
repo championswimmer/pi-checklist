@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json && node --input-type=module -e \"import { readdirSync, unlinkSync } from 'node:fs'; for (const f of readdirSync('dist')) if (f.endsWith('.d.ts') && f !== 'index.d.ts') unlinkSync('dist/' + f);\"",
     "test": "npm run build && node --test tests/*.test.mjs",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"

@@ -1,9 +1,5 @@
 import { matchesKey, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { countsOf, resolveIconSet, resolveStatusStyle, sortViews, viewsOf } from "./store.js";
-/** Classic geometric glyphs (no special font needed). Ready keeps the hollow
- * circle; blocked gets ⊘ (U+2298, "prohibited") so the two planned splits
- * are distinguishable even without color. Both are single-cell and ship in
- * virtually all monospace fonts. */
 const CLASSIC_GLYPHS = {
     ongoing: "●",
     planned: "○",
@@ -12,19 +8,13 @@ const CLASSIC_GLYPHS = {
 };
 const CLASSIC_READY = "○";
 const CLASSIC_BLOCKED = "⊘";
-/** Nerd Font Octicons (single-cell; needs a Nerd Font in the terminal).
- * Codepoints are the Nerd Fonts target column of
- * nerd-fonts `src/glyphs/octicons/mapping` (e.g. sync F087 -> F46A). */
 const NF_GLYPHS = {
-    ongoing: "\uF46A", // oct-sync — in progress
-    // oct-play (F2D3 -> F500) — ready to start. Note: F4FF looks close but is
-    // oct-person-fill (a human icon), not play.
+    ongoing: "\uF46A",
     ready: "\uF500",
-    blocked: "\uF479", // oct-blocked — waiting on deps
-    done: "\uF4A4", // oct-check-circle-fill — finished
-    cancelled: "\uF530", // oct-x-circle-fill — dropped
+    blocked: "\uF479",
+    done: "\uF4A4",
+    cancelled: "\uF530",
 };
-/** Emoji artwork (double-width; works in any modern terminal). */
 const EMOJI_GLYPHS = {
     ongoing: "🔄",
     ready: "▶️",
@@ -60,7 +50,7 @@ export function glyphFor(kind, opts) {
             return CLASSIC_BLOCKED;
     }
 }
-export function pillFor(kind) {
+function pillFor(kind) {
     switch (kind) {
         case "ongoing":
             return { label: "PROG", bg: "toolPendingBg", fg: "warning" };
@@ -74,11 +64,9 @@ export function pillFor(kind) {
             return { label: "DROP", bg: "customMessageBg", fg: "dim" };
     }
 }
-/** A status pill: the label as text on a colored background. */
-export function paintPill(theme, pill) {
+function paintPill(theme, pill) {
     return theme.bg(pill.bg, theme.bold(theme.fg(pill.fg, ` ${pill.label} `)));
 }
-/** Row color per status kind (glyph + title, every style). */
 export function colorFor(kind) {
     switch (kind) {
         case "ongoing":
@@ -93,11 +81,10 @@ export function colorFor(kind) {
             return "dim";
     }
 }
-/** Compact summaries always use the selected artwork, regardless of row style. */
 function compactSummary(checklist, opts, title = "", theme) {
     const c = countsOf(checklist);
     const icons = opts.iconSet === "emoji" ? EMOJI_GLYPHS : NF_GLYPHS;
-    const checklistIcon = opts.iconSet === "emoji" ? "☑️" : "\uED7A"; // checklist
+    const checklistIcon = opts.iconSet === "emoji" ? "☑️" : "\uED7A";
     const cancelled = checklist.tasks.length - c.total;
     const states = [
         ["done", c.done], ["ongoing", c.ongoing], ["ready", c.ready],
@@ -115,7 +102,6 @@ export function footerText(checklist, opts = DEFAULT_RENDER_OPTS, theme) {
         return undefined;
     return compactSummary(checklist, opts, "", theme);
 }
-/** The live widget shows only the five highest-priority task rows. */
 export const WIDGET_MAX_TASKS = 5;
 export function widgetLines(checklist, opts = DEFAULT_RENDER_OPTS) {
     const views = sortViews(viewsOf(checklist));
@@ -129,8 +115,6 @@ export function widgetLines(checklist, opts = DEFAULT_RENDER_OPTS) {
         const kind = statusKindOf(v);
         const glyph = glyphFor(kind, opts);
         const deps = v.blocked ? ` ← ${v.blockedBy.join(", ")}` : "";
-        // Widget keeps one row per task: subtasks are not listed; an ↳ marker
-        // (or an equal-width blank) keeps titles aligned across rows.
         const hasSubs = (v.subtaskViews ?? []).length > 0;
         const marker = hasSubs ? "↳ " : "  ";
         return { kind, text: `${marker}${glyph} ${v.id}  ${v.title}${deps}`, pill: pillFor(kind) };
@@ -179,11 +163,6 @@ function paintLine(line, theme, width, style = "pill") {
 export function paintWidget(checklist, theme, width, opts = DEFAULT_RENDER_OPTS) {
     return widgetLines(checklist, opts).map((l) => paintLine(l, theme, width, opts.style));
 }
-/** Frame pre-rendered lines as a rounded dialog box with the title set into
- * the top border. pi-tui has no bordered-box component (Box is only
- * padding + background), so dialogs draw their own chrome — same pattern as
- * the overlay-qa-tests example in the pi repo. Every returned line is
- * exactly `width` cells wide (borders included). */
 export function frameDialog(title, inner, width, theme) {
     const innerW = Math.max(1, width - 2);
     const border = (s) => theme.fg("border", s);
@@ -200,9 +179,6 @@ export function frameDialog(title, inner, width, theme) {
     out.push(border(`╰${"─".repeat(innerW)}╯`));
     return out;
 }
-// ---------------------------------------------------------------------------
-// Display-mode metadata for /checklist settings
-// ---------------------------------------------------------------------------
 export const DISPLAY_MODE_LABELS = {
     statusbar: "statusbar — below the input box",
     "widget-only": "widget-only — widget without footer",
@@ -210,26 +186,10 @@ export const DISPLAY_MODE_LABELS = {
     "end-of-turn": "end of turn — above the input box",
     hidden: "hidden — off, open on demand",
 };
-export const DISPLAY_MODE_DESCRIPTIONS = {
-    statusbar: "Persistent widget below the input box + footer counter.",
-    "widget-only": "Persistent widget below the input box without footer.",
-    "status-minimal": "First-line progress summary in the footer only. No task widget.",
-    "end-of-turn": "Widget above the input box, refreshed when each turn settles.",
-    hidden: "No widget or footer. Open with /checklist (overlay) or /checklist show.",
-};
-export const STATUS_STYLE_LABELS = {
-    color: "color — color-coded rows only",
-    pill: "pill — status on a colored background",
-    icon: "icon — progress icon only",
-};
 export const STATUS_STYLE_DESCRIPTIONS = {
     color: "Rows are only color-coded. No status word is shown.",
     pill: "The status word is a pill: text on a colored background.",
     icon: "Status is a leading icon only. Pick the artwork below.",
-};
-export const ICON_SET_LABELS = {
-    "nerd-font": "nerd-font — Nerd Font glyphs",
-    emoji: "emoji — emoji glyphs",
 };
 export const ICON_SET_DESCRIPTIONS = {
     "nerd-font": "Nerd Font Octicons (sync / play / blocked / check / x). Needs a Nerd Font patched font.",
@@ -239,11 +199,6 @@ export const USAGE_LABELS = {
     moderate: "moderate — long-running tasks only",
     aggressive: "aggressive — almost every task",
 };
-export const USAGE_DESCRIPTIONS = {
-    moderate: "Hint steers you to the checklist for long-running / multi-step work only; quick one-shot questions go untracked.",
-    aggressive: "Hint steers you to the checklist for almost every task, even small ones; only trivial single-step questions go untracked.",
-};
-/** Sample rows for settings; demo subtasks never touch the session checklist. */
 export function previewLines(theme, opts, subtasksEnabled = false) {
     const samples = [
         { kind: "ongoing", title: "Write the widget", subtasks: [
@@ -266,9 +221,6 @@ export function previewLines(theme, opts, subtasksEnabled = false) {
         ...(subtasksEnabled ? (sample.subtasks ?? []).map((subtask) => renderSample(subtask, "  ↳ ")) : []),
     ]);
 }
-// ---------------------------------------------------------------------------
-// Tool transcript renderers (compact themed rows)
-// ---------------------------------------------------------------------------
 export function renderCreateCall(args, theme) {
     const n = Array.isArray(args.tasks) ? args.tasks.length : 0;
     return new Text(theme.fg("toolTitle", theme.bold("checklist create ")) + theme.fg("muted", `${n} task(s)`), 0, 0);
@@ -307,17 +259,9 @@ export function renderChecklistResult(result, expanded, theme) {
     }
     return new Text(`${summary}\n${rows.join("\n")}`, 0, 0);
 }
-// ---------------------------------------------------------------------------
-// /checklist overlay component (display-only; agent owns mutations)
-// ---------------------------------------------------------------------------
-/** Collapse control chars / newlines so a meta key or value stays on one dialog row. */
 function oneLine(text) {
     return text.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
 }
-/** Aligned `key:  value` rows for one task/subtask's meta (dialog only).
- * Keys are padded to the widest key in the block so the values line up;
- * non-primitive values (hand-edited snapshots) are skipped. The caller's
- * frame truncates anything wider than the dialog. */
 export function metaRows(meta, indent, theme) {
     if (typeof meta !== "object" || meta === null || Array.isArray(meta))
         return [];
@@ -330,15 +274,10 @@ export function metaRows(meta, indent, theme) {
     const keyWidth = entries.reduce((w, [k]) => Math.max(w, visibleWidth(k)), 0);
     return entries.map(([k, v]) => `${indent}${theme.fg("dim", k)}${" ".repeat(keyWidth - visibleWidth(k))} ${theme.fg("muted", v)}`);
 }
-/** Share of the terminal height the /checklist dialog may use. pi-tui
- * hard-slices an overlay's rendered lines to `floor(termRows * pct / 100)`
- * (no scrolling), so the dialog must fit itself inside this budget. */
 export const DIALOG_MAX_HEIGHT_PERCENT = 70;
 export function dialogMaxRows(termRows) {
     return Math.max(1, Math.floor((termRows * DIALOG_MAX_HEIGHT_PERCENT) / 100));
 }
-/** Non-scrolling dialog lines: top + bottom border, count header + blank,
- * blank + key hint. */
 const DIALOG_CHROME_ROWS = 6;
 export class ChecklistOverlay {
     views;
@@ -346,15 +285,12 @@ export class ChecklistOverlay {
     theme;
     cb;
     opts;
-    /** Task meta preview enabled: show meta rows under tasks/subtasks that have them. */
     showMeta;
     selected = 0;
     cachedWidth;
     cachedMaxRows;
     cachedLines;
-    /** First visible flat row (task/subtask) when the list is taller than the dialog. */
     scrollTop = 0;
-    /** Task ids whose subtask rows are currently expanded. Default: all collapsed. */
     expanded = new Set();
     constructor(checklist, theme, cb, opts = DEFAULT_RENDER_OPTS, showMeta = false) {
         this.views = checklist ? sortViews(viewsOf(checklist)) : [];
@@ -364,7 +300,6 @@ export class ChecklistOverlay {
         this.opts = opts;
         this.showMeta = showMeta;
     }
-    /** One entry per visible row: a task, or a subtask under an expanded task. */
     flatRows() {
         const rows = [];
         for (const v of this.views) {
@@ -402,8 +337,6 @@ export class ChecklistOverlay {
             }
             return;
         }
-        // →/l expands the selected task's subtasks; ←/h collapses them (a
-        // subtask row collapses its own parent). No-ops on tasks without subtasks.
         if (matchesKey(data, "right") || data === "l") {
             const row = rows[this.selected];
             if (row?.kind === "task" && row.view.subtaskViews?.length) {
@@ -435,13 +368,10 @@ export class ChecklistOverlay {
         else {
             const counts = this.views.length;
             const done = this.views.filter((v) => v.status === "done").length;
-            const headerIdx = inner.push("") - 1; // count header, filled below (may show a scroll range)
+            const headerIdx = inner.push("") - 1;
             inner.push("");
             const rows = this.flatRows();
-            // Keep the selection on an existing row after a collapse shrank the list.
             this.selected = Math.min(this.selected, Math.max(0, rows.length - 1));
-            // One block per flat row: the row itself plus its meta rows. Blocks
-            // are windowed below so the dialog never exceeds the overlay height.
             const blocks = rows.map((row, i) => {
                 const block = [];
                 const v = row.view;
@@ -459,8 +389,6 @@ export class ChecklistOverlay {
                         ? th.fg("dim", ` ← ${v.dependsOn.join(", ")}`)
                         : "";
                 if (isTask) {
-                    // Expand/collapse marker slot: ▸ collapsed, ▾ expanded, blank when
-                    // the task has no subtasks (keeps rows aligned).
                     const subs = v.subtaskViews ?? [];
                     const marker = subs.length === 0 ? "  " : this.expanded.has(v.id) ? "▾ " : "▸ ";
                     block.push(`${cursor}${marker}${state}${glyph} ${id} ${title}${dep}`);
@@ -468,8 +396,6 @@ export class ChecklistOverlay {
                 else {
                     block.push(`${cursor}  ${state}${glyph} ${id} ${title}${dep}`);
                 }
-                // Meta rows are display-only (not part of flatRows), so selection and
-                // expand/collapse are unaffected. They sit under the id column.
                 if (this.showMeta && v.meta) {
                     const indent = " ".repeat(4 + visibleWidth(state) + visibleWidth(glyph) + 1);
                     block.push(...metaRows(v.meta, indent, th));
@@ -487,9 +413,6 @@ export class ChecklistOverlay {
                     inner.push(block[0]);
                 }
                 else {
-                    // A single block taller than the whole budget (a task with many meta
-                    // keys in a short terminal): keep the row line, clip the meta rows
-                    // and say how many are hidden.
                     inner.push(...block.slice(0, budget - 1), `    ${th.fg("dim", `… +${block.length - (budget - 1)} more`)}`);
                 }
             }
@@ -498,8 +421,6 @@ export class ChecklistOverlay {
         }
         inner.push("");
         inner.push(`  ${th.fg("dim", "j/k or ↑/↓ to move · →/l expand · ←/h collapse · s for settings · Esc/q to close")}`);
-        // Same rounded-border chrome as the settings dialog: frameDialog draws
-        // the ╭─╮/│/╰─╯ border with the title set into the top edge.
         const titleText = `checklist${this.title ? ` — ${this.title}` : ""}`;
         const lines = frameDialog(titleText, inner, width, th);
         this.cachedWidth = width;
@@ -507,8 +428,6 @@ export class ChecklistOverlay {
         this.cachedLines = lines;
         return lines;
     }
-    /** Pick the [start, end) flat-row window that fits `budget` lines and
-     * always contains the selected row; scrolls minimally (like a list). */
     visibleWindow(blocks, budget) {
         const heightOf = (from, to) => {
             let h = 0;
@@ -525,7 +444,6 @@ export class ChecklistOverlay {
             used += Math.min(blocks[end].length, budget);
             end++;
         }
-        // Empty space at the bottom (e.g. after a collapse): pull earlier rows back in.
         if (end === blocks.length) {
             while (start > 0 && used + blocks[start - 1].length <= budget) {
                 start--;

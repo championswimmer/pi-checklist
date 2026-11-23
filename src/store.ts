@@ -30,11 +30,11 @@ import {
   isUsageMode,
 } from "./types.js";
 
-export const ID_PATTERN = /^[a-z0-9]{3}$/;
+const ID_PATTERN = /^[a-z0-9]{3}$/;
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"; // 36
 const RESERVED_IDS: ReadonlySet<string> = new Set(["all"]);
 
-export const TASK_STATUSES: readonly TaskStatus[] = ["planned", "ongoing", "done", "cancelled"];
+const TASK_STATUSES: readonly TaskStatus[] = ["planned", "ongoing", "done", "cancelled"];
 /** Session checklists stay deliberately small and scannable. */
 export const MAX_CHECKLIST_TASKS = 10;
 /** Preview-gated subtasks stay even smaller: a fixed cap per parent task,
@@ -42,7 +42,7 @@ export const MAX_CHECKLIST_TASKS = 10;
 export const MAX_SUBTASKS_PER_TASK = 3;
 
 /** Error thrown when a subtask payload arrives while the preview is off. */
-export function subtasksPreviewError(): Error {
+function subtasksPreviewError(): Error {
   return new Error(
     "subtasks are a preview feature (disabled): enable them with /checklist settings subtasks before adding or editing subtasks",
   );
@@ -58,7 +58,7 @@ export const MAX_META_KEY_LENGTH = 40;
 export const MAX_META_STRING_LENGTH = 200;
 
 /** Error thrown when a non-empty `meta` payload arrives while the preview is off. */
-export function metaPreviewError(): Error {
+function metaPreviewError(): Error {
   return new Error(
     "task meta is a preview feature (disabled): enable it with /checklist settings meta before setting meta",
   );
@@ -162,11 +162,11 @@ function encode3(n: number): string {
   return out;
 }
 
-export function normalizeTitleKey(title: string): string {
+function normalizeTitleKey(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export function allocId(title: string, used: Set<string>): string {
+function allocId(title: string, used: Set<string>): string {
   const key = normalizeTitleKey(title);
   for (let salt = 0; salt < 64; salt++) {
     const id = encode3(fnv1a(salt === 0 ? key : `${key}\0${salt}`));
@@ -176,7 +176,7 @@ export function allocId(title: string, used: Set<string>): string {
 }
 
 /** Validate a caller-supplied id; returns the lowercased id. Throws on invalid. */
-export function normalizeId(raw: unknown): string {
+function normalizeId(raw: unknown): string {
   if (typeof raw !== "string" || !ID_PATTERN.test(raw.toLowerCase())) {
     throw new Error(
       `invalid task id ${JSON.stringify(raw)}: must be exactly 3 alphanumeric chars [a-z0-9] (e.g. "k7q")`,
@@ -190,7 +190,7 @@ export function normalizeId(raw: unknown): string {
 }
 
 /** Coerce dependsOn (string | string[] | undefined) to a lowercased string[]. */
-export function coerceDependsOn(raw: unknown): string[] {
+function coerceDependsOn(raw: unknown): string[] {
   if (raw === undefined) return [];
   const arr = typeof raw === "string" ? [raw] : raw;
   if (!Array.isArray(arr) || !arr.every((v) => typeof v === "string")) {
@@ -203,8 +203,6 @@ export function coerceDependsOn(raw: unknown): string[] {
 // State machine
 // ---------------------------------------------------------------------------
 
-type Transition = { from: TaskStatus; to: TaskStatus };
-
 const ALLOWED: ReadonlySet<string> = new Set<string>([
   "planned>ongoing",
   "planned>done",
@@ -215,12 +213,12 @@ const ALLOWED: ReadonlySet<string> = new Set<string>([
   "cancelled>planned",
 ]);
 
-export function canTransition(from: TaskStatus, to: TaskStatus): boolean {
+function canTransition(from: TaskStatus, to: TaskStatus): boolean {
   if (from === to) return true; // no-op
   return ALLOWED.has(`${from}>${to}`);
 }
 
-export function assertTransition(from: TaskStatus, to: TaskStatus, id: string): void {
+function assertTransition(from: TaskStatus, to: TaskStatus, id: string): void {
   if (from === to) return;
   if (from === "done") {
     throw new Error(`task ${id} is done (terminal in v1): cannot move done → ${to}; create a new task instead`);
@@ -276,7 +274,7 @@ export function resolveMetaEnabled(snapshot: ChecklistSnapshot): boolean {
 // Views
 // ---------------------------------------------------------------------------
 
-export function toView(task: Task, byId: Map<string, Task>): TaskView {
+function toView(task: Task, byId: Map<string, Task>): TaskView {
   const blockedBy = task.dependsOn.filter((dep) => byId.get(dep)?.status !== "done");
   const subs = task.subtasks ?? [];
   const sibById = new Map(subs.map((s) => [s.id, s]));
@@ -295,7 +293,7 @@ export function toView(task: Task, byId: Map<string, Task>): TaskView {
 /** Effective subtask view: `blockedBy` is sibling deps not done PLUS the
  * parent's own `blockedBy` when the parent is blocked (primitive S3 —
  * subtasks inherit the parent's blocked state). */
-export function toSubtaskView(
+function toSubtaskView(
   sub: Subtask,
   sibById: Map<string, Subtask>,
   parentBlockedBy: string[],
@@ -334,7 +332,7 @@ export function sortViews(views: TaskView[]): TaskView[] {
 // ---------------------------------------------------------------------------
 
 /** True if the dep graph (id → dependsOn) contains a cycle. */
-export function hasCycle(graph: Map<string, string[]>): boolean {
+function hasCycle(graph: Map<string, string[]>): boolean {
   const state = new Map<string, 1 | 2>(); // 1 = in stack, 2 = done
   const visit = (id: string): boolean => {
     const s = state.get(id);

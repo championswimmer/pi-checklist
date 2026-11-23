@@ -89,7 +89,7 @@ export interface StatusPill {
   fg: ThemeFgName;
 }
 
-export function pillFor(kind: StatusKind): StatusPill {
+function pillFor(kind: StatusKind): StatusPill {
   switch (kind) {
     case "ongoing":
       return { label: "PROG", bg: "toolPendingBg", fg: "warning" };
@@ -105,7 +105,7 @@ export function pillFor(kind: StatusKind): StatusPill {
 }
 
 /** A status pill: the label as text on a colored background. */
-export function paintPill(theme: Theme, pill: StatusPill): string {
+function paintPill(theme: Theme, pill: StatusPill): string {
   return theme.bg(pill.bg, theme.bold(theme.fg(pill.fg, ` ${pill.label} `)));
 }
 
@@ -265,29 +265,10 @@ export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   hidden: "hidden — off, open on demand",
 };
 
-export const DISPLAY_MODE_DESCRIPTIONS: Record<DisplayMode, string> = {
-  statusbar: "Persistent widget below the input box + footer counter.",
-  "widget-only": "Persistent widget below the input box without footer.",
-  "status-minimal": "First-line progress summary in the footer only. No task widget.",
-  "end-of-turn": "Widget above the input box, refreshed when each turn settles.",
-  hidden: "No widget or footer. Open with /checklist (overlay) or /checklist show.",
-};
-
-export const STATUS_STYLE_LABELS: Record<StatusStyle, string> = {
-  color: "color — color-coded rows only",
-  pill: "pill — status on a colored background",
-  icon: "icon — progress icon only",
-};
-
 export const STATUS_STYLE_DESCRIPTIONS: Record<StatusStyle, string> = {
   color: "Rows are only color-coded. No status word is shown.",
   pill: "The status word is a pill: text on a colored background.",
   icon: "Status is a leading icon only. Pick the artwork below.",
-};
-
-export const ICON_SET_LABELS: Record<IconSet, string> = {
-  "nerd-font": "nerd-font — Nerd Font glyphs",
-  emoji: "emoji — emoji glyphs",
 };
 
 export const ICON_SET_DESCRIPTIONS: Record<IconSet, string> = {
@@ -298,11 +279,6 @@ export const ICON_SET_DESCRIPTIONS: Record<IconSet, string> = {
 export const USAGE_LABELS: Record<UsageMode, string> = {
   moderate: "moderate — long-running tasks only",
   aggressive: "aggressive — almost every task",
-};
-
-export const USAGE_DESCRIPTIONS: Record<UsageMode, string> = {
-  moderate: "Hint steers you to the checklist for long-running / multi-step work only; quick one-shot questions go untracked.",
-  aggressive: "Hint steers you to the checklist for almost every task, even small ones; only trivial single-step questions go untracked.",
 };
 
 /** Sample rows for settings; demo subtasks never touch the session checklist. */

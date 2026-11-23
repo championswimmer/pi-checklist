@@ -1,38 +1,22 @@
-/**
- * Pure checklist store: state machine, FNV-1a 3-char id allocation,
- * cycle detection, ready/blockedBy views, replace/append, reconstruct.
- *
- * No pi / TUI imports — testable with plain node.
- */
 import { CHECKLIST_TOOLS, isChecklistSnapshot, isDisplayMode, isIconSet, isStatusStyle, isUsageMode, } from "./types.js";
-export const ID_PATTERN = /^[a-z0-9]{3}$/;
-const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"; // 36
+const ID_PATTERN = /^[a-z0-9]{3}$/;
+const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 const RESERVED_IDS = new Set(["all"]);
-export const TASK_STATUSES = ["planned", "ongoing", "done", "cancelled"];
-/** Session checklists stay deliberately small and scannable. */
+const TASK_STATUSES = ["planned", "ongoing", "done", "cancelled"];
 export const MAX_CHECKLIST_TASKS = 10;
-/** Preview-gated subtasks stay even smaller: a fixed cap per parent task,
- * not user-changeable (like MAX_CHECKLIST_TASKS). */
 export const MAX_SUBTASKS_PER_TASK = 3;
-/** Error thrown when a subtask payload arrives while the preview is off. */
-export function subtasksPreviewError() {
+function subtasksPreviewError() {
     return new Error("subtasks are a preview feature (disabled): enable them with /checklist settings subtasks before adding or editing subtasks");
 }
-// ---------------------------------------------------------------------------
-// Task meta (preview): flat key → string | number | boolean
-// ---------------------------------------------------------------------------
-/** Meta stays tiny on purpose: it is prompt/dialog-visible, not a database. */
 export const MAX_META_KEYS = 10;
 export const MAX_META_KEY_LENGTH = 40;
 export const MAX_META_STRING_LENGTH = 200;
-/** Error thrown when a non-empty `meta` payload arrives while the preview is off. */
-export function metaPreviewError() {
+function metaPreviewError() {
     return new Error("task meta is a preview feature (disabled): enable it with /checklist settings meta before setting meta");
 }
 function isPlainObject(raw) {
     return typeof raw === "object" && raw !== null && !Array.isArray(raw);
 }
-/** Reject a meta payload while the preview is off (`undefined` and `{}` are no-ops). */
 function assertMetaAllowed(raw, enabled) {
     if (raw === undefined || enabled)
         return;
@@ -60,10 +44,6 @@ function checkMetaValue(value, key, label) {
         return value;
     throw new Error(`${label} meta "${key}" must be a string, number or boolean (null deletes the key on update); got ${JSON.stringify(value) ?? String(value)}`);
 }
-/** Merge a meta patch into `existing`: new keys set, existing overwritten,
- * `null` deletes. Pure — returns a fresh object (or `undefined` when empty)
- * plus human-readable change parts (`k=v` / `-k`). Deleting an absent key is
- * a no-op, so create (existing = undefined) simply skips nulls. */
 export function mergeMeta(existing, raw, label) {
     if (!isPlainObject(raw)) {
         throw new Error(`${label} meta must be an object of key/value pairs (string, number or boolean values; null deletes a key)`);
@@ -87,7 +67,6 @@ export function mergeMeta(existing, raw, label) {
     }
     return { meta: Object.keys(out).length > 0 ? out : undefined, parts };
 }
-/** Compact `{k="v", n=1}` text for LLM-facing output. */
 export function formatMeta(meta) {
     if (!meta)
         return "";
@@ -96,9 +75,6 @@ export function formatMeta(meta) {
         return "";
     return `{${entries.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(", ")}}`;
 }
-// ---------------------------------------------------------------------------
-// Id allocation (FNV-1a of normalized title, base36, salt on collision)
-// ---------------------------------------------------------------------------
 function fnv1a(s) {
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
@@ -116,10 +92,10 @@ function encode3(n) {
     }
     return out;
 }
-export function normalizeTitleKey(title) {
+function normalizeTitleKey(title) {
     return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
-export function allocId(title, used) {
+function allocId(title, used) {
     const key = normalizeTitleKey(title);
     for (let salt = 0; salt < 64; salt++) {
         const id = encode3(fnv1a(salt === 0 ? key : `${key}\0${salt}`));
@@ -128,8 +104,7 @@ export function allocId(title, used) {
     }
     throw new Error("could not allocate a free 3-char id (list is nearly full)");
 }
-/** Validate a caller-supplied id; returns the lowercased id. Throws on invalid. */
-export function normalizeId(raw) {
+function normalizeId(raw) {
     if (typeof raw !== "string" || !ID_PATTERN.test(raw.toLowerCase())) {
         throw new Error(`invalid task id ${JSON.stringify(raw)}: must be exactly 3 alphanumeric chars [a-z0-9] (e.g. "k7q")`);
     }
@@ -139,8 +114,7 @@ export function normalizeId(raw) {
     }
     return id;
 }
-/** Coerce dependsOn (string | string[] | undefined) to a lowercased string[]. */
-export function coerceDependsOn(raw) {
+function coerceDependsOn(raw) {
     if (raw === undefined)
         return [];
     const arr = typeof raw === "string" ? [raw] : raw;
@@ -158,12 +132,12 @@ const ALLOWED = new Set([
     "ongoing>planned",
     "cancelled>planned",
 ]);
-export function canTransition(from, to) {
+function canTransition(from, to) {
     if (from === to)
-        return true; // no-op
+        return true;
     return ALLOWED.has(`${from}>${to}`);
 }
-export function assertTransition(from, to, id) {
+function assertTransition(from, to, id) {
     if (from === to)
         return;
     if (from === "done") {
@@ -173,10 +147,6 @@ export function assertTransition(from, to, id) {
         throw new Error(`illegal transition for task ${id}: ${from} → ${to}`);
     }
 }
-// ---------------------------------------------------------------------------
-// Display mode (statusbar | end-of-turn | hidden)
-// ---------------------------------------------------------------------------
-/** Resolve the effective display mode, migrating legacy widgetVisible. */
 export function resolveDisplayMode(snapshot) {
     if (isDisplayMode(snapshot.displayMode))
         return snapshot.displayMode;
@@ -184,39 +154,28 @@ export function resolveDisplayMode(snapshot) {
         return "hidden";
     return "statusbar";
 }
-/** Resolve the effective status style. Default "pill" preserves the
- * long-standing status-word look (now rendered on a colored background). */
 export function resolveStatusStyle(snapshot) {
     if (isStatusStyle(snapshot.statusStyle))
         return snapshot.statusStyle;
     return "pill";
 }
-/** Resolve the effective icon set. Default "nerd-font" (Nerd Font glyphs). */
 export function resolveIconSet(snapshot) {
     if (isIconSet(snapshot.iconSet))
         return snapshot.iconSet;
     return "nerd-font";
 }
-/** Resolve the effective usage-guidance mode. Default "moderate". */
 export function resolveUsage(snapshot) {
     if (isUsageMode(snapshot.usage))
         return snapshot.usage;
     return "moderate";
 }
-/** Resolve whether the subtasks preview is enabled. Default `false`.
- * Precedence is handled by the caller (global prefs file > snapshot). */
 export function resolveSubtasksEnabled(snapshot) {
     return snapshot.subtasksEnabled === true;
 }
-/** Resolve whether the task meta preview is enabled. Default `false`.
- * Precedence is handled by the caller (global prefs file > snapshot). */
 export function resolveMetaEnabled(snapshot) {
     return snapshot.metaEnabled === true;
 }
-// ---------------------------------------------------------------------------
-// Views
-// ---------------------------------------------------------------------------
-export function toView(task, byId) {
+function toView(task, byId) {
     const blockedBy = task.dependsOn.filter((dep) => byId.get(dep)?.status !== "done");
     const subs = task.subtasks ?? [];
     const sibById = new Map(subs.map((s) => [s.id, s]));
@@ -231,10 +190,7 @@ export function toView(task, byId) {
         subtaskViews: subs.map((s) => toSubtaskView(s, sibById, blockedBy)),
     };
 }
-/** Effective subtask view: `blockedBy` is sibling deps not done PLUS the
- * parent's own `blockedBy` when the parent is blocked (primitive S3 —
- * subtasks inherit the parent's blocked state). */
-export function toSubtaskView(sub, sibById, parentBlockedBy) {
+function toSubtaskView(sub, sibById, parentBlockedBy) {
     const sibBlocked = sub.dependsOn.filter((dep) => sibById.get(dep)?.status !== "done");
     const blockedBy = [...sibBlocked, ...parentBlockedBy.filter((d) => !sibBlocked.includes(d))];
     return {
@@ -250,7 +206,6 @@ export function viewsOf(checklist) {
     const byId = new Map(checklist.tasks.map((t) => [t.id, t]));
     return checklist.tasks.map((t) => toView(t, byId));
 }
-/** Sort order: ongoing, ready planned, blocked planned, done, cancelled. */
 export function sortViews(views) {
     const rank = (v) => {
         if (v.status === "ongoing")
@@ -265,12 +220,8 @@ export function sortViews(views) {
     };
     return [...views].sort((a, b) => rank(a) - rank(b) || a.createdAt - b.createdAt);
 }
-// ---------------------------------------------------------------------------
-// Cycle detection
-// ---------------------------------------------------------------------------
-/** True if the dep graph (id → dependsOn) contains a cycle. */
-export function hasCycle(graph) {
-    const state = new Map(); // 1 = in stack, 2 = done
+function hasCycle(graph) {
+    const state = new Map();
     const visit = (id) => {
         const s = state.get(id);
         if (s === 1)
@@ -291,9 +242,6 @@ export function hasCycle(graph) {
     }
     return false;
 }
-/** Build + validate a parent's subtasks (create path). Ids are allocated
- * from the shared checklist-wide `used` set (unique across tasks AND
- * subtasks); `dependsOn` must stay inside the sibling set. */
 function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, metaEnabled, now) {
     if (raw === undefined)
         return [];
@@ -307,7 +255,6 @@ function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, metaEnab
     if (raw.length > MAX_SUBTASKS_PER_TASK) {
         throw new Error(`task ${parentId} supports at most ${MAX_SUBTASKS_PER_TASK} subtasks (preview): got ${raw.length}`);
     }
-    // Pass 1: explicit ids first (same-batch DAGs), then hashed titles.
     const ids = new Array(raw.length);
     raw.forEach((s, i) => {
         if (typeof s !== "object" || s === null)
@@ -329,7 +276,6 @@ function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, metaEnab
         used.add(id);
         ids[i] = id;
     });
-    // Pass 2: resolve sibling dependsOn, build subtasks.
     const sibSet = new Set(ids);
     const fresh = raw.map((s, i) => {
         const sub = s;
@@ -360,9 +306,6 @@ function buildSubtasks(parentId, raw, used, taskIdSet, subtasksEnabled, metaEnab
     assertAcyclic(new Map(fresh.map((s) => [s.id, [...s.dependsOn]])), `subtask cycle in task ${parentId} detected: dependsOn would create a loop`);
     return fresh;
 }
-/** Validate a subtask dep list against its sibling set. Refs to task ids,
- * other parents' subtasks, or totally unknown ids are rejected — subtasks
- * may only depend on siblings within the same parent task. */
 function assertSiblingDeps(parentId, subId, dependsOn, sibSet, used, taskIdSet) {
     if (dependsOn.includes(subId))
         throw new Error(`subtask ${subId} cannot depend on itself`);
@@ -380,9 +323,6 @@ function assertAcyclic(graph, message = "dependency cycle detected: dependsOn wo
         throw new Error(message);
     }
 }
-// ---------------------------------------------------------------------------
-// Create / append (two-pass: explicit ids, then hashed titles)
-// ---------------------------------------------------------------------------
 function requireTitle(raw, index) {
     if (typeof raw !== "string" || raw.trim().length === 0) {
         throw new Error(`task at index ${index} needs a non-empty title`);
@@ -403,11 +343,9 @@ export function createOrAppend(current, input, now = Date.now(), opts) {
     }
     const baseTaskIds = base.map((t) => t.id);
     const used = new Set(baseTaskIds);
-    // Ids are unique across tasks AND subtasks: existing subtask ids are taken too.
     for (const t of base)
         for (const s of t.subtasks ?? [])
             used.add(s.id);
-    // Pass 1: allocate ids (explicit first, then hashed).
     const ids = new Array(input.tasks.length);
     input.tasks.forEach((t, i) => {
         if (typeof t !== "object" || t === null)
@@ -431,8 +369,6 @@ export function createOrAppend(current, input, now = Date.now(), opts) {
         used.add(id);
         ids[i] = id;
     });
-    // Pass 2: resolve dependsOn against existing + new ids, build tasks.
-    // taskIdSet stays task-only: tasks may not depend on subtasks.
     const taskIdSet = new Set([...baseTaskIds, ...ids]);
     const subtasksEnabled = opts?.subtasksEnabled === true;
     const metaEnabled = opts?.metaEnabled === true;
@@ -486,7 +422,6 @@ export function createOrAppend(current, input, now = Date.now(), opts) {
         assigned: fresh.map((t) => ({ id: t.id, title: t.title })),
     };
 }
-/** Every task and subtask id in use. */
 function usedIds(current) {
     const used = new Set();
     for (const t of current?.tasks ?? []) {
@@ -496,8 +431,6 @@ function usedIds(current) {
     }
     return used;
 }
-/** A random free 3-char id (not used by any task or subtask, not reserved).
- * `rng` is injectable for tests. */
 export function suggestTaskId(current, rng = Math.random) {
     const used = usedIds(current);
     for (let attempt = 0; attempt < 256; attempt++) {
@@ -509,10 +442,6 @@ export function suggestTaskId(current, rng = Math.random) {
     }
     return allocId("task", used);
 }
-/** Basic state validation for a manually added task. Checks that the draft is
- * well formed and fits the checklist. It deliberately does NOT look at
- * dependency status: depending on planned/ongoing/blocked tasks is allowed
- * (the new task is simply born `planned` and blocked until they finish). */
 export function validateAddTask(current, draft) {
     const errors = {};
     const tasks = current?.tasks ?? [];
@@ -542,7 +471,6 @@ export function validateAddTask(current, draft) {
     }
     return errors;
 }
-/** Validate and append one manually entered task (born `planned`). */
 export function addTask(current, draft, now = Date.now(), opts) {
     const errors = validateAddTask(current, draft);
     if (Object.keys(errors).length > 0)
@@ -553,8 +481,6 @@ export function addTask(current, draft, now = Date.now(), opts) {
         return { ok: true, checklist, task: checklist.tasks[checklist.tasks.length - 1] };
     }
     catch (err) {
-        // validateAddTask covers the expected cases; this keeps any other store
-        // rule (e.g. a future one) from escaping as an exception into the TUI.
         return { ok: false, errors: { form: err instanceof Error ? err.message : String(err) } };
     }
 }
@@ -565,20 +491,14 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
     if (!Array.isArray(updates) || updates.length === 0) {
         throw new Error("invalid updates: must be a non-empty array");
     }
-    // Validate everything against a working copy, then commit.
-    // Subtasks are deep-copied too: staging mutates them before the batch commits.
     const next = current.tasks.map((t) => ({
         ...t,
         dependsOn: [...t.dependsOn],
         ...(t.subtasks ? { subtasks: t.subtasks.map((s) => ({ ...s, dependsOn: [...s.dependsOn] })) } : {}),
     }));
-    // meta objects are replaced (never mutated in place) by mergeMeta, so the
-    // shallow copies above are safe to stage against.
     const metaEnabled = opts?.metaEnabled === true;
     const byId = new Map(next.map((t) => [t.id, t]));
     const changes = [];
-    // Normalize inputs first (ids lowercased, dependsOn coerced) so validation
-    // sees exactly what would be applied.
     const normalized = updates.map((u, i) => {
         if (typeof u !== "object" || u === null)
             throw new Error(`update at index ${i} must be an object`);
@@ -588,16 +508,12 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
             throw new Error(`unknown task id "${id}" (update at index ${i})`);
         return { index: i, id, task, update: u };
     });
-    // Duplicate ids in one batch touch the same task twice — reject, since
-    // per-update transition checks would otherwise see intermediate states.
     const seen = new Set();
     for (const n of normalized) {
         if (seen.has(n.id))
             throw new Error(`duplicate update for task "${n.id}": send one update per task`);
         seen.add(n.id);
     }
-    // Field edits + status checks (status guard needs final deps, so dep edits
-    // are staged first, then status transitions are checked last).
     const statusMoves = [];
     for (const n of normalized) {
         const { task, update, index } = n;
@@ -655,13 +571,9 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
         }
         task.updatedAt = now;
     }
-    // Subtask staging (adds + field edits + status intents). Runs after the
-    // task field loop so parent dep edits are already final in the working
-    // copy; status moves commit later (subtasks before tasks — see below).
     const subtasksEnabled = opts?.subtasksEnabled === true;
     const subtaskMoves = [];
     const stagedParentMove = new Map(statusMoves.map((m) => [m.task.id, m.to]));
-    // Checklist-wide id space (tasks + existing subtasks) for alloc + scope checks.
     const usedAll = new Set();
     for (const t of next) {
         usedAll.add(t.id);
@@ -687,18 +599,11 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
         if (parent.status === "cancelled") {
             throw new Error(`task ${n.id} is cancelled: revive it (cancelled → planned) before editing its subtasks (update at index ${n.index})`);
         }
-        // A parent finishing alongside its subtasks is the headline batch: it
-        // rides in ONE entry ({ status: "done", subtasks: [...] }) — the
-        // subtask moves commit first and S1 validates the parent at commit.
-        // Cancelling owns the subtasks via the cascade, so mixing any subtask
-        // edits with →cancelled is always rejected.
         if (stagedParentMove.get(n.id) === "cancelled") {
             throw new Error(`task ${n.id} moves to cancelled in this batch: drop the subtask edits — the cancel cascade owns the subtasks`);
         }
         const existing = parent.subtasks ?? [];
         const bySubId = new Map(existing.map((s) => [s.id, s]));
-        // Classify: id matching an existing subtask = patch; otherwise an add
-        // (explicit id when given, hashed title when omitted).
         const addEntries = [];
         const patchEntries = [];
         rawSubs.forEach((e, si) => {
@@ -821,13 +726,8 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
             sub.updatedAt = now;
         }
     }
-    // Dep guards for moves into ongoing/done from planned, against final deps.
     const finalById = new Map(next.map((t) => [t.id, t]));
-    // Commit subtask moves FIRST (primitive S3: sibling + inherited-parent
-    // guards) so the S1/S5 task guards below see final subtask states — a
-    // batch that finishes the last subtask and the parent together succeeds
-    // regardless of entry order.
-    const startedParents = new Map(); // parentId → started subtask ids (S2)
+    const startedParents = new Map();
     for (const m of subtaskMoves) {
         if (m.from === "planned" && (m.to === "ongoing" || m.to === "done")) {
             const sibById = new Map((m.parent.subtasks ?? []).map((s) => [s.id, s]));
@@ -856,8 +756,6 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
                 throw new Error(`task ${m.task.id} is blocked by [${blockedBy.join(", ")}]: cannot move planned → ${m.to} until every dependency is done`);
             }
         }
-        // S1 completion guard: no done parent with open subtasks. Cancelled
-        // counts as resolved (otherwise a dropped subtask would brick the parent).
         if (m.to === "done") {
             const open = (m.task.subtasks ?? [])
                 .filter((s) => s.status !== "done" && s.status !== "cancelled")
@@ -866,7 +764,6 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
                 throw new Error(`task ${m.task.id} has open subtasks [${open.join(", ")}]: finish every subtask (done) before completing the parent`);
             }
         }
-        // S5 step-back guard: an ongoing child implies a non-planned parent.
         if (m.from === "ongoing" && m.to === "planned") {
             const running = (m.task.subtasks ?? []).filter((s) => s.status === "ongoing").map((s) => s.id);
             if (running.length > 0) {
@@ -876,8 +773,6 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
         m.task.status = m.to;
         m.task.updatedAt = now;
         changes.push(`${m.task.id} ${m.from} → ${m.to}`);
-        // S4 cancel cascade: open subtasks die with the parent. Reviving the
-        // parent later does NOT revive them (explicit re-plan required).
         if (m.to === "cancelled") {
             for (const s of m.task.subtasks ?? []) {
                 if (s.status === "planned" || s.status === "ongoing") {
@@ -889,8 +784,6 @@ export function applyUpdates(current, updates, now = Date.now(), opts) {
             }
         }
     }
-    // S2 auto-progress: a subtask that started pulls a planned parent along.
-    // (Blocked parents can't appear here — S3 rejects starting their subtasks.)
     for (const task of next) {
         if (task.status !== "planned")
             continue;
@@ -928,9 +821,6 @@ export function loadFromBranch(branch) {
     }
     return found;
 }
-// ---------------------------------------------------------------------------
-// Text summaries (LLM-facing) and the before_agent_start snippet
-// ---------------------------------------------------------------------------
 export function countsOf(checklist) {
     const views = viewsOf(checklist);
     const billable = views.filter((v) => v.status !== "cancelled");
@@ -958,7 +848,6 @@ export function formatTaskLine(v, showMeta = false) {
     });
     return head + subs.join("");
 }
-/** Compact snippet re-injected on before_agent_start so compaction can't hide the list. */
 export function buildInjectSnippet(checklist) {
     const c = countsOf(checklist);
     const views = sortViews(viewsOf(checklist)).filter((v) => v.status !== "done" && v.status !== "cancelled");

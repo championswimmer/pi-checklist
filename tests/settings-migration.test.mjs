@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import extension from "../dist/index.js";
-import { loadGlobalPrefs, prefsFilePath, saveGlobalPrefs } from "../dist/prefs.js";
+import { loadGlobalPrefs, prefsFilePath, saveGlobalPrefs } from "./helpers/prefs.mjs";
 import {
   CHECKLIST_SETTINGS_FILE,
   checklistSettingsSchema,

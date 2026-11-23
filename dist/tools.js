@@ -1,19 +1,13 @@
-/** Tool schemas, guidelines, and execute logic for pi-checklist. */
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { MAX_CHECKLIST_TASKS, MAX_META_KEYS, MAX_META_KEY_LENGTH, MAX_META_STRING_LENGTH, MAX_SUBTASKS_PER_TASK, applyUpdates, countsOf, createOrAppend, formatTaskLine, sortViews, viewsOf } from "./store.js";
-// ---------------------------------------------------------------------------
-// Schemas (dependsOn coerced at the boundary: string | string[])
-// ---------------------------------------------------------------------------
 const DependsOn = Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())], {
     description: "3-char task ids that must be done first (single id or array)",
 }));
 const META_VALUE_DESC = `string (≤${MAX_META_STRING_LENGTH} chars), number or boolean`;
-/** Create-time meta: plain k:v facts. */
 const MetaCreate = Type.Optional(Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()]), {
     description: `Preview (enable with /checklist settings meta): flat key → ${META_VALUE_DESC}; at most ${MAX_META_KEYS} keys, keys ≤${MAX_META_KEY_LENGTH} chars. Example: { "agent": "impl-auth", "pr": 42 }`,
 }));
-/** Update-time meta: merged into the existing meta; null deletes a key. */
 const MetaUpdate = Type.Optional(Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean(), Type.Null()]), {
     description: `Preview (enable with /checklist settings meta): MERGED into the existing meta — listed keys are set (${META_VALUE_DESC}), unlisted keys stay, and "key": null deletes that key`,
 }));
@@ -69,9 +63,6 @@ export const ChecklistUpdateParams = Type.Object({
         meta: MetaUpdate,
     }), { description: "All-or-nothing batch of updates" }),
 });
-// ---------------------------------------------------------------------------
-// Prompt metadata (guidelines must name the tool — never "this tool")
-// ---------------------------------------------------------------------------
 export const CREATE_SNIPPET = "Create or replace the session task checklist.";
 export const CREATE_GUIDELINES = [
     "Use checklist_create at the start of multi-step work; use mode replace when the plan changes substantially and mode append when new work appears mid-session.",
