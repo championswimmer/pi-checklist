@@ -1,5 +1,15 @@
 # Changelog
 
+## v4.2.0 (2026-11-23)
+
+**Full Changelog**: https://github.com/championswimmer/pi-checklist/compare/v4.1.0...v4.2.0
+
+### Commits
+
+- release v4.2.0 ([1fe1bb4](https://github.com/championswimmer/pi-checklist/commit/1fe1bb445c4ed66f47f32df340d83b70d6ac852a))
+- perf: strip comments, internal d.ts, dead constants, and test-only prefs from dist ([f15f4f3](https://github.com/championswimmer/pi-checklist/commit/f15f4f3bf1627b1063d0729833dbabff68789d1b))
+- docs: update changelog [skip ci] ([85c62e2](https://github.com/championswimmer/pi-checklist/commit/85c62e216c854fe0cf8692a2ff33bc8eafe90291))
+
 ## v4.1.0 (2026-11-22)
 
 ### What's Changed
