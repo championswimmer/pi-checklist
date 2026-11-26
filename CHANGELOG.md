@@ -1,5 +1,21 @@
 # Changelog
 
+## v4.2.1 (2026-11-26)
+
+**Full Changelog**: https://github.com/championswimmer/pi-checklist/compare/v4.2.0...v4.2.1
+
+### Commits
+
+- release v4.2.1 ([a2e05cd](https://github.com/championswimmer/pi-checklist/commit/a2e05cd19e101f8ea433e308c2357709189518e1))
+- docs: banner-first README (banner, install, why use it, how to use) ([b03c5c6](https://github.com/championswimmer/pi-checklist/commit/b03c5c6e5e164b73c82e53c98bd258a1ee3daad5))
+- feat: add vertical (story-sized) banner ([58971eb](https://github.com/championswimmer/pi-checklist/commit/58971eb1b11263b75a37bdd6276a69c5e0c59b36))
+- feat: pi.dev-style banner with fonts and a demo of what the extension does ([dbc04ef](https://github.com/championswimmer/pi-checklist/commit/dbc04ef5e38fed7fa8426e500027e1ac456351ed))
+- feat: bolder pixel icons and banners (round 2) ([4bb5505](https://github.com/championswimmer/pi-checklist/commit/4bb5505ba58c9a285dbbabc7ce1feebcc40bbe38))
+- feat: redesign icon and banner in muted pi pixel-techno style ([8199f60](https://github.com/championswimmer/pi-checklist/commit/8199f6095d9ba61f00b9493eee9f169a52447b79))
+- docs: show icon next to README title ([60f0b00](https://github.com/championswimmer/pi-checklist/commit/60f0b00112d864c80f5fa57b3e07814791d6148c))
+- feat: add icon and banner; set pi.image for the package gallery ([8593a43](https://github.com/championswimmer/pi-checklist/commit/8593a43c7b85d354fddf31b7376b7638692a21ce))
+- docs: update changelog [skip ci] ([fff07de](https://github.com/championswimmer/pi-checklist/commit/fff07de168378b827544b1c53b0178446345f08c))
+
 ## v4.2.0 (2026-11-23)
 
 **Full Changelog**: https://github.com/championswimmer/pi-checklist/compare/v4.1.0...v4.2.0
