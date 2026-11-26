@@ -1,4 +1,4 @@
-# <img src="https://raw.githubusercontent.com/championswimmer/pi-checklist/main/assets/icon.png" width="44" height="44" align="absmiddle" alt=""> pi-checklist
+![pi-checklist](https://raw.githubusercontent.com/championswimmer/pi-checklist/main/assets/banner.png)
 
 [![npm version](https://img.shields.io/npm/v/pi-checklist)](https://www.npmjs.com/package/pi-checklist)
 [![npm downloads](https://img.shields.io/npm/dm/pi-checklist)](https://www.npmjs.com/package/pi-checklist)
@@ -13,27 +13,55 @@ The agent can:
 - declare `dependsOn` so blocked work is obvious
 - render the list in the TUI after each turn so you can see what is done and what is left
 
-## Preview
+## Install
+
+```sh
+pi install npm:pi-checklist
+```
+
+### From git
+
+```sh
+pi install git:github.com/championswimmer/pi-checklist
+```
+
+### Quick one-off test
+
+Built output, which is what ships:
+
+```sh
+npm run build
+pi -e ./dist/index.js
+```
+
+### Development
+
+Symlink sources for hot-reload, no rebuild needed:
+
+```sh
+mkdir -p ~/.pi/agent/extensions
+ln -s "$(pwd)/src/index.ts" ~/.pi/agent/extensions/pi-checklist.ts
+```
+
+Hot-reload inside pi with `/reload`.
+
+## Why use it
+
+- The agent keeps a visible plan for long, multi-step work instead of holding it only in context.
+- Dependencies (`dependsOn`) make blocked work obvious, and a task cannot start until its dependencies are done.
+- You see progress live: a widget and a `☑ n/m` footer, plus a `/checklist` dialog with every task.
+- Tasks live in the session file, so they survive `/resume`, `/branch`, `/undo` and compaction.
+- Display, icons and how strongly the agent is steered toward the checklist are configurable.
+
+## How to use
+
+### Preview
 
 ![/checklist dialog](https://raw.githubusercontent.com/championswimmer/pi-checklist/main/docs/checklist-dialog.png)
 
 The `/checklist` dialog (above) shows every task. Session checklists hold at most 10 tasks; the live widget shows the top 5 by priority and the `☑ n/m` footer tracks overall progress.
 
-## Check out my other Pi extensions
-
-- [![pi-cache-graph](https://img.shields.io/badge/📊_pi--cache--graph-orange?style=flat-square)](https://github.com/championswimmer/pi-cache-graph) — Real-time prompt cache hit rates and token metrics.
-- [![pi-checklist](https://img.shields.io/badge/✅_pi--checklist-teal?style=flat-square)](https://github.com/championswimmer/pi-checklist) — Session task checklist with dependencies and a TUI renderer.
-- [![pi-context-decisions](https://img.shields.io/badge/🧠_pi--context--decisions-indigo?style=flat-square)](https://github.com/championswimmer/pi-context-decisions) — Selects relevant skills and optionally filters tools for each task.
-- [![pi-context-prune](https://img.shields.io/badge/✂️_pi--context--prune-green?style=flat-square)](https://github.com/championswimmer/pi-context-prune) — Prunes verbose tool outputs from context while preserving history.
-- [![pi-context-usage](https://img.shields.io/badge/🪟_pi--context--usage-purple?style=flat-square)](https://github.com/championswimmer/pi-context-usage) — Dot-grid visualization of context window token usage.
-- [![pi-gauge](https://img.shields.io/badge/⚡_pi--gauge-yellow?style=flat-square)](https://github.com/championswimmer/pi-gauge) — Live tokens/sec and TTFT in the status bar.
-- [![pi-subagent-manager](https://img.shields.io/badge/🤖_pi--subagent--manager-blue?style=flat-square)](https://github.com/championswimmer/pi-subagent-manager) — Delegate work to parallel subagents and monitor their progress.
-
-## Status
-
-Implemented; see the usage and development sections below.
-
-## Usage
+### Tools and settings
 
 Checklist 4.0 requires Pi 1.5.0 or newer and Node.js 22.19.0 or newer. Existing settings are converted in place when Checklist starts. The global settings path stays `<agentDir>/pi-checklist.json`.
 
@@ -119,35 +147,9 @@ Checklist tasks live in the session JSONL and survive `/resume`, `/branch`, `/un
 
 On upgrade, Checklist converts legacy `displayMode` to `widgetDisplay` and `footerEnabled` in the same file. `widgetDisplay` accepts `"persistent"`, `"off"`, or `"end-of-turn"`, and `footerEnabled` is a boolean. The other setting keys keep their existing values. Files store overrides, so default settings can be omitted.
 
-## Install
+## Status
 
-**From npm (release):**
-
-```sh
-pi install npm:pi-checklist
-```
-
-**From git:**
-
-```sh
-pi install git:github.com/championswimmer/pi-checklist
-```
-
-**Quick one-off test (built output — this is what ships):**
-
-```sh
-npm run build
-pi -e ./dist/index.js
-```
-
-**Development (symlink sources for hot-reload, no rebuild needed):**
-
-```sh
-mkdir -p ~/.pi/agent/extensions
-ln -s "$(pwd)/src/index.ts" ~/.pi/agent/extensions/pi-checklist.ts
-```
-
-Hot-reload inside pi with `/reload`.
+Implemented; see the usage and development sections below.
 
 ## Developing / releasing
 
@@ -186,3 +188,12 @@ update to `main`, re-run the failed workflow. Prerelease tags do not update it.
 To regenerate locally, fetch all history and tags, authenticate the GitHub CLI,
 and run `node scripts/changelog.mjs`. Add `--release vX.Y.Z` to create a
 missing GitHub release without changing an existing release's notes.
+## Check out my other Pi extensions
+
+- [![pi-cache-graph](https://img.shields.io/badge/📊_pi--cache--graph-orange?style=flat-square)](https://github.com/championswimmer/pi-cache-graph) — Real-time prompt cache hit rates and token metrics.
+- [![pi-checklist](https://img.shields.io/badge/✅_pi--checklist-teal?style=flat-square)](https://github.com/championswimmer/pi-checklist) — Session task checklist with dependencies and a TUI renderer.
+- [![pi-context-decisions](https://img.shields.io/badge/🧠_pi--context--decisions-indigo?style=flat-square)](https://github.com/championswimmer/pi-context-decisions) — Selects relevant skills and optionally filters tools for each task.
+- [![pi-context-prune](https://img.shields.io/badge/✂️_pi--context--prune-green?style=flat-square)](https://github.com/championswimmer/pi-context-prune) — Prunes verbose tool outputs from context while preserving history.
+- [![pi-context-usage](https://img.shields.io/badge/🪟_pi--context--usage-purple?style=flat-square)](https://github.com/championswimmer/pi-context-usage) — Dot-grid visualization of context window token usage.
+- [![pi-gauge](https://img.shields.io/badge/⚡_pi--gauge-yellow?style=flat-square)](https://github.com/championswimmer/pi-gauge) — Live tokens/sec and TTFT in the status bar.
+- [![pi-subagent-manager](https://img.shields.io/badge/🤖_pi--subagent--manager-blue?style=flat-square)](https://github.com/championswimmer/pi-subagent-manager) — Delegate work to parallel subagents and monitor their progress.
