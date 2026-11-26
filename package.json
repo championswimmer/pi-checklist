@@ -30,7 +30,8 @@
   "pi": {
     "extensions": [
       "./dist/index.js"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/championswimmer/pi-checklist/main/assets/banner.png"
   },
   "dependencies": {
     "pi-extension-settings-tui": "^0.7.0"
