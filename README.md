@@ -1,4 +1,4 @@
-# pi-checklist
+# <img src="https://raw.githubusercontent.com/championswimmer/pi-checklist/main/assets/icon.png" width="44" height="44" align="absmiddle" alt=""> pi-checklist
 
 [![npm version](https://img.shields.io/npm/v/pi-checklist)](https://www.npmjs.com/package/pi-checklist)
 [![npm downloads](https://img.shields.io/npm/dm/pi-checklist)](https://www.npmjs.com/package/pi-checklist)
